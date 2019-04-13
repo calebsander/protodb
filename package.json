@@ -2,7 +2,7 @@
 	"name": "protodb",
 	"version": "0.0.1",
 	"description": "ProtoDB",
-	"main": "index.js",
+	"main": "dist/index.js",
 	"scripts": {
 		"build": "tsc",
 		"test": "echo \"Error: no test specified\" && exit 1"
@@ -12,5 +12,8 @@
 	"devDependencies": {
 		"@types/node": "^11.13.0",
 		"typescript": "^3.4.2"
+	},
+	"dependencies": {
+		"structure-bytes": "^17.2.0"
 	}
 }
