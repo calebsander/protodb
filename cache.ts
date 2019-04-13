@@ -4,6 +4,9 @@ import {promisify} from 'util'
 const close = promisify(fs.close),
       open = promisify(fs.open),
       read = promisify(fs.read),
+      stat = promisify(fs.stat),
+      truncate = promisify(fs.ftruncate),
+      unlink = promisify(fs.unlink),
       write = promisify(fs.write),
       writeFile = promisify(fs.writeFile)
 
@@ -47,7 +50,8 @@ async function loadPage(file: string, page: number, create?: true): Promise<Cach
 	if (!cachedPage) {
 		const data = new Uint8Array(PAGE_SIZE)
 		if (!create) {
-			await read(fd, data, 0, PAGE_SIZE, page * PAGE_SIZE)
+			const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page * PAGE_SIZE)
+			if (!bytesRead) throw new Error(`Page ${page} of file ${file} does not exist`)
 			cachedPage = pages.get(page) // page may have been loaded by another request
 		}
 		if (!cachedPage) {
@@ -97,6 +101,40 @@ export class FilePage {
 	}
 }
 
-export async function createFile(file: string): Promise<void> {
-	await writeFile(file, EMPTY, {flag: 'wx'})
+export function createFile(file: string): Promise<void> {
+	return writeFile(file, EMPTY, {flag: 'wx'})
+}
+export function removeFile(file: string): Promise<void> {
+	return unlink(file)
+}
+export async function getFile(file: string): Promise<ArrayBuffer> {
+	const {size} = await stat(file)
+	const result = new Uint8Array(size)
+	const pagePromises: Promise<void>[] = []
+	for (let offset = 0, pageNo = 0; offset < size; offset += PAGE_SIZE, pageNo++) {
+		pagePromises.push(new FilePage(file, pageNo).use(async page =>
+			result.set(new Uint8Array(page), offset)
+		))
+	}
+	await Promise.all(pagePromises)
+	return result.buffer
+}
+export async function setFile(file: string, contents: ArrayBuffer): Promise<void> {
+	try {
+		const {fd} = await getFileCache(file)
+		await truncate(fd, 0)
+	}
+	catch {
+		await createFile(file)
+	}
+	const pagePromises: Promise<void>[] = []
+	const {byteLength} = contents
+	for (let offset = 0, pageNo = 0; offset < byteLength; offset += PAGE_SIZE, pageNo++) {
+		pagePromises.push(new FilePage(file, pageNo).create(async page =>
+			new Uint8Array(page).set(
+				new Uint8Array(contents, offset, Math.min(PAGE_SIZE, byteLength - offset))
+			)
+		))
+	}
+	await Promise.all(pagePromises)
 }
