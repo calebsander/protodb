@@ -4,15 +4,23 @@ import * as readline from 'readline'
 import * as sb from 'structure-bytes'
 import {promisify} from 'util'
 import {PORT} from '../constants'
-import {Command, commandType, listReponseType, voidReponseType} from '../sb-types/request'
+import {
+	Command,
+	commandType,
+	BytesResponse,
+	bytesResponseType,
+	listReponseType,
+	voidReponseType
+} from '../sb-types/request'
 import {concat, toArrayBuffer} from '../util'
 
 const readFile = promisify(fs.readFile)
+const readType = promisify(sb.readType)
 
 readline.createInterface(process.stdin)
 	.on('line', async line => {
 		const args = line.trim().split(/\s+/)
-		let command: Command, responseType: sb.Type<any>
+		let command: Command, responseType: sb.Type<any>, bytesType: sb.Type<any>
 		try {
 			const type = args[0].toLowerCase()
 			switch (type) {
@@ -24,7 +32,7 @@ readline.createInterface(process.stdin)
 				case 'item_create': {
 					const [name, typeFile] = args.slice(1) as (string | undefined)[]
 					if (!(name && typeFile)) {
-						throw new Error(`Syntax: ${type} name typeFile`)
+						throw new Error(`Syntax: ${type} name type_file`)
 					}
 					const schema = toArrayBuffer(await readFile(typeFile))
 					sb.r.type(schema) // check that the type can be read
@@ -36,6 +44,26 @@ readline.createInterface(process.stdin)
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
 					command = {type, name}
+					responseType = voidReponseType
+					break
+				}
+				case 'item_get': {
+					const [name, typeFile] = args.slice(1) as (string | undefined)[]
+					if (!(name && typeFile)) {
+						throw new Error(`Syntax: ${type} name type_file`)
+					}
+					command = {type, name}
+					responseType = bytesResponseType
+					bytesType = await readType(fs.createReadStream(typeFile))
+					break
+				}
+				case 'item_set': {
+					const [name, typeFile, value] = args.slice(1) as (string | undefined)[]
+					if (!(name && typeFile && value)) {
+						throw new Error(`Syntax: ${type} name type_file value`)
+					}
+					const valueType = await readType(fs.createReadStream(typeFile))
+					command = {type, name, value: valueType.valueBuffer(JSON.parse(value))}
 					responseType = voidReponseType
 					break
 				}
@@ -55,7 +83,14 @@ readline.createInterface(process.stdin)
 				client.end(new Uint8Array(commandType.valueBuffer(command)))
 			)
 			.on('data', chunk => responseChunks.push(chunk))
-			.on('end', () =>
-				console.log(responseType.readValue(concat(responseChunks)))
-			)
+			.on('end', () => {
+				let response = responseType.readValue(concat(responseChunks))
+				if (responseType === bytesResponseType) {
+					const bytesResponse: BytesResponse = response
+					if ('data' in bytesResponse) {
+						response = bytesType.consumeValue(bytesResponse.data, 0).value
+					}
+				}
+				console.log(response)
+			})
 	})

@@ -28,35 +28,62 @@ const itemDropCommandType = new sb.StructType<ItemDropCommand>({
 	name: new sb.StringType
 })
 
+export interface ItemGetCommand {
+	type: 'item_get'
+	name: string
+}
+const itemGetCommandType = new sb.StructType<ItemGetCommand>({
+	type: literalType('item_get'),
+	name: new sb.StringType
+})
+
+export interface ItemSetCommand {
+	type: 'item_set'
+	name: string
+	value: ArrayBuffer
+}
+const itemSetCommandType = new sb.StructType<ItemSetCommand>({
+	type: literalType('item_set'),
+	name: new sb.StringType,
+	value: new sb.OctetsType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
 	| ItemDropCommand
+	| ItemGetCommand
+	| ItemSetCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
-	itemDropCommandType
+	itemDropCommandType,
+	itemGetCommandType,
+	itemSetCommandType
 ])
 
-export interface VoidResponse {
-	error: string | null
-}
-export const voidReponseType = new sb.StructType<VoidResponse>({
-	error: new sb.OptionalType(new sb.StringType)
-})
+type ErrorResponse<A> = {error: string} | A
+const errorType = new sb.StructType({error: new sb.StringType})
+
+export type VoidResponse = ErrorResponse<{}>
+export const voidReponseType = new sb.ChoiceType<VoidResponse>([
+	errorType,
+	new sb.StructType({})
+])
 
 export type CollectionType = 'item'
 export interface Collection {
 	name: string
 	type: CollectionType
 }
-export interface ListResponse extends VoidResponse {
-	collections: Collection[] | null
+interface Collections {
+	collections: Collection[]
 }
-export const listReponseType = new sb.StructType<ListResponse>({
-	error: new sb.OptionalType(new sb.StringType),
-	collections: new sb.OptionalType(
-		new sb.ArrayType(
+export type ListResponse = ErrorResponse<Collections>
+export const listReponseType = new sb.ChoiceType<ListResponse>([
+	errorType,
+	new sb.StructType<Collections>({
+		collections: new sb.ArrayType(
 			new sb.StructType({
 				name: new sb.StringType,
 				type: new sb.EnumType({
@@ -65,5 +92,11 @@ export const listReponseType = new sb.StructType<ListResponse>({
 				})
 			})
 		)
-	)
-})
+	})
+])
+
+export type BytesResponse = ErrorResponse<{data: ArrayBuffer}>
+export const bytesResponseType = new sb.ChoiceType<BytesResponse>([
+	errorType,
+	new sb.StructType({data: new sb.OctetsType})
+])
