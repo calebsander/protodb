@@ -8,6 +8,7 @@ const listCommandType = new sb.StructType<ListCommand>({
 	type: literalType('list')
 })
 
+// TODO: item_create and hash_create don't need to know the schemas
 export interface ItemCreateCommand {
 	type: 'item_create'
 	name: string
@@ -70,6 +71,30 @@ const hashDropCommandType = new sb.StructType<HashDropCommand>({
 	name: new sb.StringType
 })
 
+export interface HashGetCommand {
+	type: 'hash_get'
+	name: string
+	key: ArrayBuffer
+}
+const hashGetCommandType = new sb.StructType<HashGetCommand>({
+	type: literalType('hash_get'),
+	name: new sb.StringType,
+	key: new sb.OctetsType
+})
+
+export interface HashSetCommand {
+	type: 'hash_set'
+	name: string
+	key: ArrayBuffer
+	value: ArrayBuffer
+}
+const hashSetCommandType = new sb.StructType<HashSetCommand>({
+	type: literalType('hash_set'),
+	name: new sb.StringType,
+	key: new sb.OctetsType,
+	value: new sb.OctetsType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
@@ -78,6 +103,8 @@ export type Command
 	| ItemSetCommand
 	| HashCreateCommand
 	| HashDropCommand
+	| HashGetCommand
+	| HashSetCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
@@ -85,7 +112,9 @@ export const commandType = new sb.ChoiceType<Command>([
 	itemGetCommandType,
 	itemSetCommandType,
 	hashCreateCommandType,
-	hashDropCommandType
+	hashDropCommandType,
+	hashGetCommandType,
+	hashSetCommandType
 ])
 
 type ErrorResponse<A> = {error: string} | A
@@ -127,4 +156,13 @@ export type BytesResponse = ErrorResponse<{data: ArrayBuffer}>
 export const bytesResponseType = new sb.ChoiceType<BytesResponse>([
 	errorType,
 	new sb.StructType({data: new sb.OctetsType})
+])
+
+export type OptionalBytesResponse =
+	ErrorResponse<{data: ArrayBuffer | null}>
+export const optionalBytesResponseType = new sb.ChoiceType<OptionalBytesResponse>([
+	errorType,
+	new sb.StructType<OptionalBytesResponse>({
+		data: new sb.OptionalType(new sb.OctetsType)
+	})
 ])

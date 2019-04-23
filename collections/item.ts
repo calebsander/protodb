@@ -33,6 +33,7 @@ export async function drop(name: string): Promise<void> {
 export async function get(name: string): Promise<ArrayBuffer> {
 	await checkIsItem(name)
 	try {
+		// TODO: trim file
 		return await getFile(filename(name))
 	}
 	catch {

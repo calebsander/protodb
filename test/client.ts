@@ -8,8 +8,10 @@ import {
 	Command,
 	commandType,
 	BytesResponse,
+	OptionalBytesResponse,
 	bytesResponseType,
 	listReponseType,
+	optionalBytesResponseType,
 	voidReponseType
 } from '../sb-types/request'
 import {concat, toArrayBuffer} from '../util'
@@ -90,6 +92,40 @@ readline.createInterface(process.stdin)
 					responseType = voidReponseType
 					break
 				}
+				case 'hash_get': {
+					const [name, keyTypeFile, key, valueTypeFile] = args.slice(1) as (string | undefined)[]
+					if (!(name && keyTypeFile && key && valueTypeFile)) {
+						throw new Error(`Syntax: ${type} name key_type_file key value_type_file`)
+					}
+					const [keyType, valueType] = await Promise.all(
+						[keyTypeFile, valueTypeFile].map(typeFile =>
+							readType(fs.createReadStream(typeFile))
+						)
+					)
+					command = {type, name, key: keyType.valueBuffer(JSON.parse(key))}
+					responseType = optionalBytesResponseType
+					bytesType = valueType
+					break
+				}
+				case 'hash_set': {
+					const [name, keyTypeFile, key, valueTypeFile, value] = args.slice(1) as (string | undefined)[]
+					if (!(name && keyTypeFile && key && valueTypeFile && value)) {
+						throw new Error(`Syntax: ${type} name key_type_file key value_type_file value`)
+					}
+					const [keyType, valueType] = await Promise.all(
+						[keyTypeFile, valueTypeFile].map(typeFile =>
+							readType(fs.createReadStream(typeFile))
+						)
+					)
+					command = {
+						type,
+						name,
+						key: keyType.valueBuffer(JSON.parse(key)),
+						value: valueType.valueBuffer(JSON.parse(value))
+					}
+					responseType = voidReponseType
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}
@@ -112,6 +148,12 @@ readline.createInterface(process.stdin)
 					const bytesResponse: BytesResponse = response
 					if ('data' in bytesResponse) {
 						response = bytesType.consumeValue(bytesResponse.data, 0).value
+					}
+				}
+				else if (responseType === optionalBytesResponseType) {
+					const bytesResponse: OptionalBytesResponse = response
+					if ('data' in bytesResponse && bytesResponse.data) {
+						response = bytesType.readValue(bytesResponse.data)
 					}
 				}
 				console.log(response)

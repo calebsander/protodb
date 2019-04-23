@@ -10,7 +10,8 @@ const close = promisify(fs.close),
       write = promisify(fs.write),
       writeFile = promisify(fs.writeFile)
 
-export const PAGE_SIZE = 1 << 12 // 4096 bytes
+const LOG_PAGE_SIZE = 12
+const PAGE_SIZE = 1 << LOG_PAGE_SIZE // 4096 bytes
 const EMPTY = new Uint8Array(0)
 
 interface CacheBuffer extends ArrayBuffer {
@@ -50,7 +51,7 @@ async function loadPage(file: string, page: number, create?: true): Promise<Cach
 	if (!cachedPage) {
 		const data = new Uint8Array(PAGE_SIZE)
 		if (!create) {
-			const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page * PAGE_SIZE)
+			const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
 			if (!bytesRead) throw new Error(`Page ${page} of file ${file} does not exist`)
 			cachedPage = pages.get(page) // page may have been loaded by another request
 		}
@@ -79,11 +80,14 @@ async function releasePage(file: string, page: number): Promise<void> {
 		// TODO: maintain a cache instead of immediately flushing pages
 		const {contents} = cachedPage
 		if (contents.dirty) {
-			await write(fd, new Uint8Array(contents), 0, PAGE_SIZE, page * PAGE_SIZE)
+			await write(fd, new Uint8Array(contents), 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
 		}
 		pages.delete(page)
 	}
 }
+
+export const getPageNo = (byte: number) => byte >> LOG_PAGE_SIZE
+export const getPageOffset = (byte: number) => byte & (PAGE_SIZE - 1)
 
 type PageConsumer<T> = (page: CacheBuffer) => Promise<T>
 

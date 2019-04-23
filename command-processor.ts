@@ -10,11 +10,15 @@ import {
 	ItemSetCommand,
 	HashCreateCommand,
 	HashDropCommand,
+	HashGetCommand,
+	HashSetCommand,
 	BytesResponse,
 	ListResponse,
+	OptionalBytesResponse,
 	VoidResponse,
 	bytesResponseType,
 	listReponseType,
+	optionalBytesResponseType,
 	voidReponseType
 } from './sb-types/request'
 
@@ -62,6 +66,16 @@ function runHashDrop({name}: HashDropCommand): Promise<VoidResponse> {
 		.then(_ => ({}))
 		.catch(errorToString)
 }
+function runHashGet({name, key}: HashGetCommand): Promise<OptionalBytesResponse> {
+	return hash.get(name, key)
+		.then(data => ({data}))
+		.catch(errorToString)
+}
+function runHashSet({name, key, value}: HashSetCommand): Promise<VoidResponse> {
+	return hash.set(name, key, value)
+		.then(_ => ({}))
+		.catch(errorToString)
+}
 
 export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 	const command = commandType.readValue(data)
@@ -80,6 +94,10 @@ export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 			return voidReponseType.valueBuffer(await runHashCreate(command))
 		case 'hash_drop':
 			return voidReponseType.valueBuffer(await runHashDrop(command))
+		case 'hash_get':
+			return optionalBytesResponseType.valueBuffer(await runHashGet(command))
+		case 'hash_set':
+			return voidReponseType.valueBuffer(await runHashSet(command))
 		default:
 			const unreachable: never = command
 			unreachable
