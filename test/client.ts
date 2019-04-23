@@ -14,9 +14,8 @@ import {
 	optionalBytesResponseType,
 	voidReponseType
 } from '../sb-types/request'
-import {concat, toArrayBuffer} from '../util'
+import {concat} from '../util'
 
-const readFile = promisify(fs.readFile)
 const readType = promisify(sb.readType)
 
 readline.createInterface(process.stdin)
@@ -32,13 +31,9 @@ readline.createInterface(process.stdin)
 					break
 				}
 				case 'item_create': {
-					const [name, typeFile] = args.slice(1) as (string | undefined)[]
-					if (!(name && typeFile)) {
-						throw new Error(`Syntax: ${type} name type_file`)
-					}
-					const schema = toArrayBuffer(await readFile(typeFile))
-					sb.r.type(schema) // check that the type can be read
-					command = {type, name, schema}
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {type, name}
 					responseType = voidReponseType
 					break
 				}
@@ -70,18 +65,9 @@ readline.createInterface(process.stdin)
 					break
 				}
 				case 'hash_create': {
-					const [name, keyTypeFile, valueTypeFile] = args.slice(1) as (string | undefined)[]
-					if (!(name && keyTypeFile && valueTypeFile)) {
-						throw new Error(`Syntax: ${type} name key_type_file value_type_file`)
-					}
-					const [keySchema, valueSchema] = await Promise.all(
-						[keyTypeFile, valueTypeFile].map(async typeFile => {
-							const schema = toArrayBuffer(await readFile(typeFile))
-							sb.r.type(schema) // check that the type can be read
-							return schema
-						})
-					)
-					command = {type, name, keySchema, valueSchema}
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {type, name}
 					responseType = voidReponseType
 					break
 				}

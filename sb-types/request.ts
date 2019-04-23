@@ -1,5 +1,5 @@
 import * as sb from 'structure-bytes'
-import {literalType, Schema, schemaType} from './common'
+import {literalType} from './common'
 
 interface ListCommand {
 	type: 'list'
@@ -8,16 +8,13 @@ const listCommandType = new sb.StructType<ListCommand>({
 	type: literalType('list')
 })
 
-// TODO: item_create and hash_create don't need to know the schemas
 export interface ItemCreateCommand {
 	type: 'item_create'
 	name: string
-	schema: Schema
 }
 const itemCreateCommandType = new sb.StructType<ItemCreateCommand>({
 	type: literalType('item_create'),
-	name: new sb.StringType,
-	schema: schemaType
+	name: new sb.StringType
 })
 
 export interface ItemDropCommand {
@@ -52,14 +49,10 @@ const itemSetCommandType = new sb.StructType<ItemSetCommand>({
 export interface HashCreateCommand {
 	type: 'hash_create'
 	name: string
-	keySchema: Schema
-	valueSchema: Schema
 }
 const hashCreateCommandType = new sb.StructType<HashCreateCommand>({
 	type: literalType('hash_create'),
-	name: new sb.StringType,
-	keySchema: schemaType,
-	valueSchema: schemaType
+	name: new sb.StringType
 })
 
 export interface HashDropCommand {

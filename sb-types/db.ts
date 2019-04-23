@@ -1,27 +1,15 @@
 import * as sb from 'structure-bytes'
-import {literalType, Schema, schemaType} from './common'
+import {literalType} from './common'
 
 interface ItemType {
 	type: 'item'
-	schema: Schema
 }
-
-const itemType = new sb.StructType<ItemType>({
-	type: literalType('item'),
-	schema: schemaType
-})
+const itemType = new sb.StructType<ItemType>({type: literalType('item')})
 
 interface HashType {
 	type: 'hash'
-	keySchema: Schema
-	valueSchema: Schema
 }
-
-const hashType = new sb.StructType<HashType>({
-	type: literalType('hash'),
-	keySchema: schemaType,
-	valueSchema: schemaType
-})
+const hashType = new sb.StructType<HashType>({type: literalType('hash')})
 
 export type CollectionType
 	= ItemType

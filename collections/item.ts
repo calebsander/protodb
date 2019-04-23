@@ -2,7 +2,6 @@ import * as path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
 import {getFile, removeFile, setFile} from '../cache'
 import {DATA_DIR} from '../constants'
-import {Schema} from '../sb-types/common'
 
 const COLLECTION_TYPE = 'item'
 
@@ -17,8 +16,8 @@ async function checkIsItem(name: string): Promise<void> {
 	}
 }
 
-export function create(name: string, schema: Schema): Promise<void> {
-	return addCollection(name, {type: COLLECTION_TYPE, schema})
+export function create(name: string): Promise<void> {
+	return addCollection(name, {type: COLLECTION_TYPE})
 }
 
 export async function drop(name: string): Promise<void> {

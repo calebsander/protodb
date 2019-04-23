@@ -3,7 +3,6 @@ import * as path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
 import {createFile, FilePage, getPageNo, getPageOffset, removeFile} from '../cache'
 import {DATA_DIR} from '../constants'
-import {Schema} from '../sb-types/common'
 import {
 	Bucket,
 	BUCKET_INDEX_BYTES,
@@ -78,10 +77,8 @@ async function getBucket(name: string, bucket: number): Promise<Bucket> {
 	)
 }
 
-export async function create(
-	name: string, keySchema: Schema, valueSchema: Schema
-): Promise<void> {
-	await addCollection(name, {type: COLLECTION_TYPE, keySchema, valueSchema})
+export async function create(name: string): Promise<void> {
+	await addCollection(name, {type: COLLECTION_TYPE})
 	const initDirectory = async () => {
 		const directoryFile = directoryFilename(name)
 		await createFile(directoryFile)

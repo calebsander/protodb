@@ -36,8 +36,8 @@ async function runList(): Promise<ListResponse> {
 		return errorToString(e)
 	}
 }
-function runItemCreate({name, schema}: ItemCreateCommand): Promise<VoidResponse> {
-	return item.create(name, schema)
+function runItemCreate({name}: ItemCreateCommand): Promise<VoidResponse> {
+	return item.create(name)
 		.then(_ => ({}))
 		.catch(errorToString)
 }
@@ -56,8 +56,8 @@ function runItemSet({name, value}: ItemSetCommand): Promise<VoidResponse> {
 		.then(_ => ({}))
 		.catch(errorToString)
 }
-function runHashCreate({name, keySchema, valueSchema}: HashCreateCommand): Promise<VoidResponse> {
-	return hash.create(name, keySchema, valueSchema)
+function runHashCreate({name}: HashCreateCommand): Promise<VoidResponse> {
+	return hash.create(name)
 		.then(_ => ({}))
 		.catch(errorToString)
 }
