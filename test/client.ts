@@ -18,8 +18,9 @@ import {concat} from '../util'
 
 const readType = promisify(sb.readType)
 
-readline.createInterface(process.stdin)
-	.on('line', async line => {
+async function processCommands() {
+	const rl = readline.createInterface(process.stdin)
+	for await (const line of rl) {
 		const args = line.trim().split(/\s+/)
 		let command: Command, responseType: sb.Type<any>, bytesType: sb.Type<any>
 		try {
@@ -118,30 +119,37 @@ readline.createInterface(process.stdin)
 		}
 		catch (e) {
 			console.error(e)
-			return
+			continue
 		}
 
-		const client = net.createConnection(PORT)
-		const responseChunks: Buffer[] = []
-		client
+		const client: net.Socket = net.createConnection(PORT)
 			.on('connect', () =>
 				client.end(new Uint8Array(commandType.valueBuffer(command)))
 			)
-			.on('data', chunk => responseChunks.push(chunk))
-			.on('end', () => {
-				let response = responseType.readValue(concat(responseChunks))
-				if (responseType === bytesResponseType) {
-					const bytesResponse: BytesResponse = response
-					if ('data' in bytesResponse) {
-						response = bytesType.consumeValue(bytesResponse.data, 0).value
+		const response = await new Promise((resolve, reject) => {
+			const responseChunks: Buffer[] = []
+			client
+				.on('data', chunk => responseChunks.push(chunk))
+				.on('end', () => {
+					let response = responseType.readValue(concat(responseChunks))
+					if (responseType === bytesResponseType) {
+						const bytesResponse: BytesResponse = response
+						if ('data' in bytesResponse) {
+							response = bytesType.consumeValue(bytesResponse.data, 0).value
+						}
 					}
-				}
-				else if (responseType === optionalBytesResponseType) {
-					const bytesResponse: OptionalBytesResponse = response
-					if ('data' in bytesResponse && bytesResponse.data) {
-						response = bytesType.readValue(bytesResponse.data)
+					else if (responseType === optionalBytesResponseType) {
+						const bytesResponse: OptionalBytesResponse = response
+						if ('data' in bytesResponse && bytesResponse.data) {
+							response = bytesType.readValue(bytesResponse.data)
+						}
 					}
-				}
-				console.log(response)
-			})
-	})
+					resolve(response)
+				})
+				.on('error', reject)
+		})
+		console.log(response)
+	}
+}
+
+processCommands()
