@@ -11,9 +11,24 @@ const itemType = new sb.StructType<ItemType>({
 	schema: schemaType
 })
 
-export type CollectionType = ItemType
+interface HashType {
+	type: 'hash'
+	keySchema: Schema
+	valueSchema: Schema
+}
+
+const hashType = new sb.StructType<HashType>({
+	type: literalType('hash'),
+	keySchema: schemaType,
+	valueSchema: schemaType
+})
+
+export type CollectionType
+	= ItemType
+	| HashType
 const collectionType = new sb.ChoiceType<CollectionType>([
-	itemType
+	itemType,
+	hashType
 ])
 
 export type Collections = Map<string, CollectionType>

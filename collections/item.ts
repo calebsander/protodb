@@ -17,17 +17,17 @@ async function checkIsItem(name: string): Promise<void> {
 	}
 }
 
-export async function create(name: string, schema: Schema): Promise<void> {
-	await addCollection(name, {type: COLLECTION_TYPE, schema})
+export function create(name: string, schema: Schema): Promise<void> {
+	return addCollection(name, {type: COLLECTION_TYPE, schema})
 }
 
 export async function drop(name: string): Promise<void> {
-	await dropCollection(name)
-
-	try {
-		await removeFile(filename(name))
-	}
-	catch {} // not a problem if the item was never set
+	await checkIsItem(name)
+	await Promise.all([
+		dropCollection(name),
+		removeFile(filename(name))
+			.catch(_ => {}) // not a problem if the item was never set
+	])
 }
 
 export async function get(name: string): Promise<ArrayBuffer> {

@@ -1,5 +1,6 @@
 import {getCollections} from './collections'
 import * as item from './collections/item'
+import * as hash from './collections/hash'
 import {
 	Collection,
 	commandType,
@@ -7,6 +8,8 @@ import {
 	ItemDropCommand,
 	ItemGetCommand,
 	ItemSetCommand,
+	HashCreateCommand,
+	HashDropCommand,
 	BytesResponse,
 	ListResponse,
 	VoidResponse,
@@ -49,6 +52,16 @@ function runItemSet({name, value}: ItemSetCommand): Promise<VoidResponse> {
 		.then(_ => ({}))
 		.catch(errorToString)
 }
+function runHashCreate({name, keySchema, valueSchema}: HashCreateCommand): Promise<VoidResponse> {
+	return hash.create(name, keySchema, valueSchema)
+		.then(_ => ({}))
+		.catch(errorToString)
+}
+function runHashDrop({name}: HashDropCommand): Promise<VoidResponse> {
+	return hash.drop(name)
+		.then(_ => ({}))
+		.catch(errorToString)
+}
 
 export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 	const command = commandType.readValue(data)
@@ -63,6 +76,10 @@ export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 			return bytesResponseType.valueBuffer(await runItemGet(command))
 		case 'item_set':
 			return voidReponseType.valueBuffer(await runItemSet(command))
+		case 'hash_create':
+			return voidReponseType.valueBuffer(await runHashCreate(command))
+		case 'hash_drop':
+			return voidReponseType.valueBuffer(await runHashDrop(command))
 		default:
 			const unreachable: never = command
 			unreachable

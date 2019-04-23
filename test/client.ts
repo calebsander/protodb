@@ -67,6 +67,29 @@ readline.createInterface(process.stdin)
 					responseType = voidReponseType
 					break
 				}
+				case 'hash_create': {
+					const [name, keyTypeFile, valueTypeFile] = args.slice(1) as (string | undefined)[]
+					if (!(name && keyTypeFile && valueTypeFile)) {
+						throw new Error(`Syntax: ${type} name key_type_file value_type_file`)
+					}
+					const [keySchema, valueSchema] = await Promise.all(
+						[keyTypeFile, valueTypeFile].map(async typeFile => {
+							const schema = toArrayBuffer(await readFile(typeFile))
+							sb.r.type(schema) // check that the type can be read
+							return schema
+						})
+					)
+					command = {type, name, keySchema, valueSchema}
+					responseType = voidReponseType
+					break
+				}
+				case 'hash_drop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {type, name}
+					responseType = voidReponseType
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}

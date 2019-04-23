@@ -48,18 +48,44 @@ const itemSetCommandType = new sb.StructType<ItemSetCommand>({
 	value: new sb.OctetsType
 })
 
+export interface HashCreateCommand {
+	type: 'hash_create'
+	name: string
+	keySchema: Schema
+	valueSchema: Schema
+}
+const hashCreateCommandType = new sb.StructType<HashCreateCommand>({
+	type: literalType('hash_create'),
+	name: new sb.StringType,
+	keySchema: schemaType,
+	valueSchema: schemaType
+})
+
+export interface HashDropCommand {
+	type: 'hash_drop'
+	name: string
+}
+const hashDropCommandType = new sb.StructType<HashDropCommand>({
+	type: literalType('hash_drop'),
+	name: new sb.StringType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
 	| ItemDropCommand
 	| ItemGetCommand
 	| ItemSetCommand
+	| HashCreateCommand
+	| HashDropCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
 	itemDropCommandType,
 	itemGetCommandType,
-	itemSetCommandType
+	itemSetCommandType,
+	hashCreateCommandType,
+	hashDropCommandType
 ])
 
 type ErrorResponse<A> = {error: string} | A
@@ -71,7 +97,9 @@ export const voidReponseType = new sb.ChoiceType<VoidResponse>([
 	new sb.StructType({})
 ])
 
-export type CollectionType = 'item'
+export type CollectionType
+	= 'item'
+	| 'hash'
 export interface Collection {
 	name: string
 	type: CollectionType
@@ -88,7 +116,7 @@ export const listReponseType = new sb.ChoiceType<ListResponse>([
 				name: new sb.StringType,
 				type: new sb.EnumType({
 					type: new sb.StringType as sb.Type<CollectionType>,
-					values: ['item']
+					values: ['item', 'hash']
 				})
 			})
 		)
