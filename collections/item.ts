@@ -2,6 +2,7 @@ import * as path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
 import {getFile, removeFile, setFile} from '../cache'
 import {DATA_DIR} from '../constants'
+import {itemType} from '../sb-types/item'
 
 const COLLECTION_TYPE = 'item'
 
@@ -32,8 +33,7 @@ export async function drop(name: string): Promise<void> {
 export async function get(name: string): Promise<ArrayBuffer> {
 	await checkIsItem(name)
 	try {
-		// TODO: trim file
-		return await getFile(filename(name))
+		return itemType.consumeValue(await getFile(filename(name)), 0).value
 	}
 	catch {
 		throw new Error(`Collection ${name} has not been set`)
@@ -42,5 +42,5 @@ export async function get(name: string): Promise<ArrayBuffer> {
 
 export async function set(name: string, value: ArrayBuffer): Promise<void> {
 	await checkIsItem(name)
-	await setFile(filename(name), value)
+	await setFile(filename(name), itemType.valueBuffer(value))
 }

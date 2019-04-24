@@ -135,7 +135,7 @@ async function processCommands() {
 					if (responseType === bytesResponseType) {
 						const bytesResponse: BytesResponse = response
 						if ('data' in bytesResponse) {
-							response = bytesType.consumeValue(bytesResponse.data, 0).value
+							response = bytesType.readValue(bytesResponse.data)
 						}
 					}
 					else if (responseType === optionalBytesResponseType) {
