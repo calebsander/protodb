@@ -17,7 +17,8 @@ import {
 	BUCKET_INDEX_BYTES,
 	bucketIndexType,
 	bucketType,
-	depthType
+	Header,
+	headerType
 } from '../sb-types/hash'
 import {toArrayBuffer} from '../util'
 
@@ -53,15 +54,15 @@ async function checkIsHash(name: string): Promise<void> {
 	}
 }
 
-function getDepth(name: string): Promise<number> {
+function getHeader(name: string): Promise<Header> {
 	return new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
-		depthType.consumeValue(page, 0).value
+		headerType.consumeValue(page, 0).value
 	)
 }
 
-function setDepth(name: string, depth: number, create?: true): Promise<void> {
+function setHeader(name: string, header: Header, create?: true): Promise<void> {
 	return new FilePage(directoryFilename(name), HEADER_PAGE).use(async page => {
-		new Uint8Array(page).set(new Uint8Array(depthType.valueBuffer(depth)))
+		new Uint8Array(page).set(new Uint8Array(headerType.valueBuffer(header)))
 		page.dirty = true
 	}, create)
 }
@@ -107,7 +108,8 @@ function setBucket(name: string, page: number, bucket: Bucket): Promise<void> {
 	})
 }
 
-async function extendDirectory(name: string, depth: number): Promise<void> {
+async function extendDirectory(name: string, header: Header): Promise<void> {
+	const {depth} = header
 	const doubleDirectory = async () => {
 		const directoryFile = directoryFilename(name)
 		const bucketIndexBytes = BUCKET_INDEX_BYTES << depth
@@ -138,7 +140,8 @@ async function extendDirectory(name: string, depth: number): Promise<void> {
 			await Promise.all(copyPromises)
 		}
 	}
-	await Promise.all([doubleDirectory(), setDepth(name, depth + 1)])
+	header.depth++
+	await Promise.all([doubleDirectory(), setHeader(name, header)])
 }
 
 export async function create(name: string): Promise<void> {
@@ -147,7 +150,7 @@ export async function create(name: string): Promise<void> {
 		const directoryFile = directoryFilename(name)
 		await createFile(directoryFile)
 		await Promise.all([
-			setDepth(name, INITIAL_DEPTH, true),
+			setHeader(name, {depth: INITIAL_DEPTH, size: 0}, true),
 			new FilePage(directoryFile, DIRECTORY_START_PAGE).create(async page =>
 				new Uint8Array(page).set(new Uint8Array(bucketIndexType.valueBuffer(0)))
 			)
@@ -171,7 +174,8 @@ export async function drop(name: string): Promise<void> {
 
 export async function get(name: string, key: ArrayBuffer): Promise<ArrayBuffer | null> {
 	await checkIsHash(name)
-	const bucketIndex = depthHash(fullHash(key), await getDepth(name))
+	const {depth} = await getHeader(name)
+	const bucketIndex = depthHash(fullHash(key), depth)
 	const {items} = await getBucket(name, await getBucketPage(name, bucketIndex))
 	for (const item of items) {
 		if (equal(item.key, key)) return item.value
@@ -183,21 +187,25 @@ export async function set(
 	name: string, key: ArrayBuffer, value: ArrayBuffer
 ): Promise<void> {
 	await checkIsHash(name)
-	let depth = await getDepth(name)
+	const header = await getHeader(name)
 	const hash = fullHash(key)
-	const bucketIndex = depthHash(hash, depth)
+	const bucketIndex = depthHash(hash, header.depth)
 	const bucketPage = await getBucketPage(name, bucketIndex)
 	const bucket = await getBucket(name, bucketPage)
 	const {items} = bucket
-	let oldKey = false
+	let newKey = true
 	for (const item of items) {
 		if (equal(item.key, key)) {
 			item.value = value
-			oldKey = true
+			newKey = false
 			break
 		}
 	}
-	if (!oldKey) items.push({key, value})
+	if (newKey) {
+		items.push({key, value})
+		header.size++
+		await setHeader(name, header)
+	}
 
 	// TODO: what if hash needs to be resized multiple times in a row?
 	// (This is very unlikely if each bucket stores ~100 items)
@@ -212,10 +220,7 @@ export async function set(
 
 		// Grow directory if necessary
 		const oldDepth = bucket.depth
-		if (oldDepth === depth) {
-			await extendDirectory(name, depth)
-			depth++
-		}
+		if (oldDepth === header.depth) await extendDirectory(name, header)
 
 		// Split bucket
 		const newDepth = oldDepth + 1
@@ -233,9 +238,10 @@ export async function set(
 			const newBucketPage = await getPageCount(bucketsFilename(name))
 			const updatePromises =
 				[addBucket(name, newBucketPage, {depth: newDepth, items: items1})]
-			// Update all 2 ** (depth - newDepth) bucket indices to point to the new bucket
+			// Update the 2 ** (header.depth - newDepth) bucket indices
+			// that now point to the new bucket
 			const bucketRepeatInterval = 1 << newDepth
-			const maxBucketIndex = 1 << depth
+			const maxBucketIndex = 1 << header.depth
 			for (
 				let bucket1 = depthHash(bucketIndex, oldDepth) | 1 << oldDepth;
 				bucket1 < maxBucketIndex;
@@ -254,15 +260,26 @@ export async function set(
 
 export async function remove(name: string, key: ArrayBuffer): Promise<void> {
 	await checkIsHash(name)
-	const bucketIndex = depthHash(fullHash(key), await getDepth(name))
+	const header = await getHeader(name)
+	const bucketIndex = depthHash(fullHash(key), header.depth)
 	const bucketPage = await getBucketPage(name, bucketIndex)
 	const bucket = await getBucket(name, bucketPage)
 	const {items} = bucket
 	for (let i = 0; i < items.length; i++) {
 		if (equal(items[i].key, key)) {
 			items.splice(i, 1)
-			await setBucket(name, bucketPage, bucket)
+			header.size--
+			await Promise.all([
+				setBucket(name, bucketPage, bucket),
+				setHeader(name, header)
+			])
 			break
 		}
 	}
+}
+
+export async function size(name: string): Promise<number> {
+	await checkIsHash(name)
+	const {size} = await getHeader(name)
+	return size
 }

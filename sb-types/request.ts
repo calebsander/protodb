@@ -99,6 +99,15 @@ const hashDeleteCommandType = new sb.StructType<HashDeleteCommand>({
 	key: new sb.OctetsType
 })
 
+export interface HashSizeCommand {
+	type: 'hash_size'
+	name: string
+}
+const hashSizeCommandType = new sb.StructType<HashSizeCommand>({
+	type: literalType('hash_size'),
+	name: new sb.StringType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
@@ -110,6 +119,7 @@ export type Command
 	| HashGetCommand
 	| HashSetCommand
 	| HashDeleteCommand
+	| HashSizeCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
@@ -120,7 +130,8 @@ export const commandType = new sb.ChoiceType<Command>([
 	hashDropCommandType,
 	hashGetCommandType,
 	hashSetCommandType,
-	hashDeleteCommandType
+	hashDeleteCommandType,
+	hashSizeCommandType
 ])
 
 type ErrorResponse<A> = {error: string} | A
@@ -164,11 +175,16 @@ export const bytesResponseType = new sb.ChoiceType<BytesResponse>([
 	new sb.StructType({data: new sb.OctetsType})
 ])
 
-export type OptionalBytesResponse =
-	ErrorResponse<{data: ArrayBuffer | null}>
+export type OptionalBytesResponse = ErrorResponse<{data: ArrayBuffer | null}>
 export const optionalBytesResponseType = new sb.ChoiceType<OptionalBytesResponse>([
 	errorType,
 	new sb.StructType<OptionalBytesResponse>({
 		data: new sb.OptionalType(new sb.OctetsType)
 	})
+])
+
+export type UnsignedResponse = ErrorResponse<{value: number}>
+export const unsignedResponseType = new sb.ChoiceType<UnsignedResponse>([
+	errorType,
+	new sb.StructType<UnsignedResponse>({value: new sb.FlexUnsignedIntType})
 ])

@@ -13,13 +13,16 @@ import {
 	HashGetCommand,
 	HashSetCommand,
 	HashDeleteCommand,
+	HashSizeCommand,
 	BytesResponse,
 	ListResponse,
 	OptionalBytesResponse,
+	UnsignedResponse,
 	VoidResponse,
 	bytesResponseType,
 	listReponseType,
 	optionalBytesResponseType,
+	unsignedResponseType,
 	voidReponseType
 } from './sb-types/request'
 
@@ -82,6 +85,11 @@ function runHashDelete({name, key}: HashDeleteCommand): Promise<VoidResponse> {
 		.then(_ => ({}))
 		.catch(errorToString)
 }
+function runHashSize({name}: HashSizeCommand): Promise<UnsignedResponse> {
+	return hash.size(name)
+		.then(value => ({value}))
+		.catch(errorToString)
+}
 
 export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 	const command = commandType.readValue(data)
@@ -106,6 +114,8 @@ export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 			return voidReponseType.valueBuffer(await runHashSet(command))
 		case 'hash_delete':
 			return voidReponseType.valueBuffer(await runHashDelete(command))
+		case 'hash_size':
+			return unsignedResponseType.valueBuffer(await runHashSize(command))
 		default:
 			const unreachable: never = command
 			unreachable

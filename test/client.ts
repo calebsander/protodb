@@ -12,6 +12,7 @@ import {
 	bytesResponseType,
 	listReponseType,
 	optionalBytesResponseType,
+	unsignedResponseType,
 	voidReponseType
 } from '../sb-types/request'
 import {concat} from '../util'
@@ -121,6 +122,13 @@ async function processCommands() {
 					const keyType = await readType(fs.createReadStream(keyTypeFile))
 					command = {type, name, key: keyType.valueBuffer(JSON.parse(key))}
 					responseType = voidReponseType
+					break
+				}
+				case 'hash_size': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {type, name}
+					responseType = unsignedResponseType
 					break
 				}
 				default:

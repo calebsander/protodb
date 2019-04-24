@@ -1,6 +1,15 @@
 import * as sb from 'structure-bytes'
 
-export const depthType = new sb.UnsignedByteType
+const depthType = new sb.UnsignedByteType
+
+export interface Header {
+	depth: number
+	size: number
+}
+export const headerType = new sb.StructType<Header>({
+	depth: depthType,
+	size: new sb.FlexUnsignedIntType
+})
 
 export interface BucketItem {
 	key: ArrayBuffer
