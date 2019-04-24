@@ -88,6 +88,17 @@ const hashSetCommandType = new sb.StructType<HashSetCommand>({
 	value: new sb.OctetsType
 })
 
+export interface HashDeleteCommand {
+	type: 'hash_delete'
+	name: string
+	key: ArrayBuffer
+}
+const hashDeleteCommandType = new sb.StructType<HashDeleteCommand>({
+	type: literalType('hash_delete'),
+	name: new sb.StringType,
+	key: new sb.OctetsType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
@@ -98,6 +109,7 @@ export type Command
 	| HashDropCommand
 	| HashGetCommand
 	| HashSetCommand
+	| HashDeleteCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
@@ -107,7 +119,8 @@ export const commandType = new sb.ChoiceType<Command>([
 	hashCreateCommandType,
 	hashDropCommandType,
 	hashGetCommandType,
-	hashSetCommandType
+	hashSetCommandType,
+	hashDeleteCommandType
 ])
 
 type ErrorResponse<A> = {error: string} | A

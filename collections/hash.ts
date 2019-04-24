@@ -251,3 +251,18 @@ export async function set(
 		])
 	}
 }
+
+export async function remove(name: string, key: ArrayBuffer): Promise<void> {
+	await checkIsHash(name)
+	const bucketIndex = depthHash(fullHash(key), await getDepth(name))
+	const bucketPage = await getBucketPage(name, bucketIndex)
+	const bucket = await getBucket(name, bucketPage)
+	const {items} = bucket
+	for (let i = 0; i < items.length; i++) {
+		if (equal(items[i].key, key)) {
+			items.splice(i, 1)
+			await setBucket(name, bucketPage, bucket)
+			break
+		}
+	}
+}

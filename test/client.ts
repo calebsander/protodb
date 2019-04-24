@@ -113,6 +113,16 @@ async function processCommands() {
 					responseType = voidReponseType
 					break
 				}
+				case 'hash_delete': {
+					const [name, keyTypeFile, key] = args.slice(1) as (string | undefined)[]
+					if (!(name && keyTypeFile && key)) {
+						throw new Error(`Syntax: ${type} name key_type_file key`)
+					}
+					const keyType = await readType(fs.createReadStream(keyTypeFile))
+					command = {type, name, key: keyType.valueBuffer(JSON.parse(key))}
+					responseType = voidReponseType
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}

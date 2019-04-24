@@ -12,6 +12,7 @@ import {
 	HashDropCommand,
 	HashGetCommand,
 	HashSetCommand,
+	HashDeleteCommand,
 	BytesResponse,
 	ListResponse,
 	OptionalBytesResponse,
@@ -76,6 +77,11 @@ function runHashSet({name, key, value}: HashSetCommand): Promise<VoidResponse> {
 		.then(_ => ({}))
 		.catch(errorToString)
 }
+function runHashDelete({name, key}: HashDeleteCommand): Promise<VoidResponse> {
+	return hash.remove(name, key)
+		.then(_ => ({}))
+		.catch(errorToString)
+}
 
 export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 	const command = commandType.readValue(data)
@@ -98,6 +104,8 @@ export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 			return optionalBytesResponseType.valueBuffer(await runHashGet(command))
 		case 'hash_set':
 			return voidReponseType.valueBuffer(await runHashSet(command))
+		case 'hash_delete':
+			return voidReponseType.valueBuffer(await runHashDelete(command))
 		default:
 			const unreachable: never = command
 			unreachable
