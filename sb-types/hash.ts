@@ -2,7 +2,7 @@ import * as sb from 'structure-bytes'
 
 export const depthType = new sb.UnsignedByteType
 
-interface BucketItem {
+export interface BucketItem {
 	key: ArrayBuffer
 	value: ArrayBuffer
 }

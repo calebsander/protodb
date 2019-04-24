@@ -11,7 +11,7 @@ const close = promisify(fs.close),
       writeFile = promisify(fs.writeFile)
 
 const LOG_PAGE_SIZE = 12
-const PAGE_SIZE = 1 << LOG_PAGE_SIZE // 4096 bytes
+export const PAGE_SIZE = 1 << LOG_PAGE_SIZE // 4096 bytes
 const EMPTY = new Uint8Array(0)
 
 interface CacheBuffer extends ArrayBuffer {
@@ -111,11 +111,16 @@ export function createFile(file: string): Promise<void> {
 export function removeFile(file: string): Promise<void> {
 	return unlink(file)
 }
-export async function getFile(file: string): Promise<ArrayBuffer> {
+export async function getPageCount(file: string): Promise<number> {
 	const {size} = await stat(file)
-	const result = new Uint8Array(size)
+	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
+	return getPageNo(size)
+}
+export async function getFile(file: string): Promise<ArrayBuffer> {
+	const pages = await getPageCount(file)
+	const result = new Uint8Array(pages << LOG_PAGE_SIZE)
 	const pagePromises: Promise<void>[] = []
-	for (let offset = 0, pageNo = 0; offset < size; offset += PAGE_SIZE, pageNo++) {
+	for (let offset = 0, pageNo = 0; pageNo < pages; offset += PAGE_SIZE, pageNo++) {
 		pagePromises.push(new FilePage(file, pageNo).use(async page =>
 			result.set(new Uint8Array(page), offset)
 		))
