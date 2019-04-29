@@ -1,6 +1,7 @@
 import * as fs from 'fs'
 import * as net from 'net'
 import {promisify} from 'util'
+import {shutdown} from './cache'
 import {getCollections} from './collections'
 import {runCommand} from './command-processor'
 import {DATA_DIR, PORT} from './constants'
@@ -14,8 +15,24 @@ async function initDB(): Promise<void> {
 	await getCollections()
 }
 
+async function cleanup(): Promise<void> {
+	try {
+		await shutdown()
+	}
+	catch (e) {
+		console.error('Shutdown failed with error:', e)
+	}
+	process.exit()
+}
+
 (async () => {
 	await initDB()
+	process
+		.on('exit', code => {
+			if (code) console.error('Cache may not have been flushed')
+		})
+		.on('SIGTERM', cleanup)
+		.on('SIGINT', cleanup)
 	net.createServer({allowHalfOpen: true}, connection => {
 		const chunks: Buffer[] = []
 		connection

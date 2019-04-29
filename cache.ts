@@ -22,67 +22,73 @@ interface CachedPage {
 	pinCount: number
 }
 interface FilePageCache {
-	pages: Map<number, CachedPage>
+	pages: Map<number, Promise<CachedPage>>
 	fd: number
 }
 interface PageCache {
-	[file: string]: FilePageCache | undefined
+	[file: string]: Promise<FilePageCache> | undefined
 }
 
 const cache: PageCache = {}
 
-async function getFileCache(file: string): Promise<FilePageCache> {
-	let fileCache = cache[file]
+function getFileCache(file: string): Promise<FilePageCache> {
+	const fileCache = cache[file]
 	if (fileCache) return fileCache
 
-	const fd = await open(file, 'r+')
-	fileCache = cache[file] // file may have been loaded by another request
-	if (fileCache) {
-		await close(fd)
-		return fileCache
-	}
-
-	return cache[file] = {pages: new Map, fd}
+	return cache[file] = (async () => {
+		try {
+			const fd = await open(file, 'r+')
+			return {pages: new Map, fd}
+		}
+		catch (e) {
+			delete cache[file] // if open failed, remove this file from the cache
+			throw e
+		}
+	})()
 }
 async function loadPage(file: string, page: number, create?: true): Promise<CacheBuffer> {
 	const {pages, fd} = await getFileCache(file)
-	let cachedPage = pages.get(page)
-	let contents: CacheBuffer | undefined
-	if (!cachedPage) {
-		const data = new Uint8Array(PAGE_SIZE)
-		if (!create) {
-			const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
-			if (!bytesRead) throw new Error(`Page ${page} of file ${file} does not exist`)
-			cachedPage = pages.get(page) // page may have been loaded by another request
-		}
-		if (!cachedPage) {
-			contents = data.buffer as CacheBuffer
+	let pagePromise = pages.get(page)
+	if (!pagePromise) {
+		pages.set(page, pagePromise = (async () => {
+			const data = new Uint8Array(PAGE_SIZE)
+			if (!create) {
+				const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
+				if (!bytesRead) throw new Error(`Page ${page} of file ${file} does not exist`)
+			}
+			const contents = data.buffer as CacheBuffer
 			contents.dirty = !!create
-			pages.set(page, cachedPage = {contents, pinCount: 0})
-		}
+			return {contents, pinCount: 0}
+		})())
 	}
+	const cachedPage = await pagePromise
 	cachedPage.pinCount++
-	if (!contents) ({contents} = cachedPage)
-	return contents
+	return cachedPage.contents
+}
+
+async function flushPage(
+	fd: number, page: number, contents: CacheBuffer
+): Promise<void> {
+	if (contents.dirty) {
+		await write(fd, new Uint8Array(contents), 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
+	}
 }
 
 async function releasePage(file: string, page: number): Promise<void> {
 	const fileCache = cache[file]
 	if (!fileCache) throw new Error(`File ${file} is not in cache`)
-	const {pages, fd} = fileCache
-	const cachedPage = pages.get(page)
-	if (!cachedPage) {
+	const {pages, fd} = await fileCache
+	const pagePromise = pages.get(page)
+	if (!pagePromise) {
 		throw new Error(`Page ${page} of file ${file} is not in cache`)
 	}
 
 	// Page can be evicted if nothing is currently using it
-	if (--cachedPage.pinCount === 0) {
+	const cachedPage = await pagePromise
+	if (!--cachedPage.pinCount) {
 		// TODO: maintain a cache instead of immediately flushing pages
-		const {contents} = cachedPage
-		if (contents.dirty) {
-			await write(fd, new Uint8Array(contents), 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
-		}
 		pages.delete(page)
+		await flushPage(fd, page, cachedPage.contents)
 	}
 }
 
@@ -96,9 +102,12 @@ export class FilePage {
 
 	async use<T>(consumer: PageConsumer<T>, create?: true): Promise<T> {
 		const contents = await loadPage(this.file, this.page, create)
-		const result = await consumer(contents)
-		await releasePage(this.file, this.page)
-		return result
+		try {
+			return await consumer(contents)
+		}
+		finally {
+			await releasePage(this.file, this.page)
+		}
 	}
 	async create<T>(consumer: PageConsumer<T>): Promise<T> {
 		return this.use(consumer, true)
@@ -108,7 +117,13 @@ export class FilePage {
 export function createFile(file: string): Promise<void> {
 	return writeFile(file, EMPTY, {flag: 'wx'})
 }
-export function removeFile(file: string): Promise<void> {
+export async function removeFile(file: string): Promise<void> {
+	const pagePromise = cache[file]
+	if (pagePromise) {
+		delete cache[file]
+		const {fd} = await pagePromise
+		await close(fd)
+	}
 	return unlink(file)
 }
 export async function getPageCount(file: string): Promise<number> {
@@ -146,4 +161,21 @@ export async function setFile(file: string, contents: ArrayBuffer): Promise<void
 		))
 	}
 	await Promise.all(pagePromises)
+}
+
+export async function shutdown(): Promise<void> {
+	const savePromises: Promise<void>[] = []
+	const fds: number[] = []
+	for (const file in cache) {
+		const {pages, fd} = await cache[file]!
+		for (const [page, pagePromise] of pages) {
+			savePromises.push((async () => {
+				const {contents} = await pagePromise
+				return flushPage(fd, page, contents)
+			})())
+		}
+		fds.push(fd)
+	}
+	await Promise.all(savePromises)
+	await Promise.all(fds.map(fd => close(fd)))
 }
