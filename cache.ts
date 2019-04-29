@@ -12,21 +12,66 @@ const close = promisify(fs.close),
 
 const LOG_PAGE_SIZE = 12
 export const PAGE_SIZE = 1 << LOG_PAGE_SIZE // 4096 bytes
+const FRAMES = 3
 const EMPTY = new Uint8Array(0)
 
 interface CacheBuffer extends ArrayBuffer {
 	dirty: boolean // TODO: can this be tracked automatically?
 }
-interface CachedPage {
+interface Frame {
+	fileCache: FilePageCache
+	page: number
 	contents: CacheBuffer
 	pinCount: number
+	accessed: boolean
 }
 interface FilePageCache {
-	pages: Map<number, Promise<CachedPage>>
+	pages: Map<number, Frame | Promise<Frame>>
 	fd: number
 }
 interface PageCache {
-	[file: string]: Promise<FilePageCache> | undefined
+	[file: string]: FilePageCache | Promise<FilePageCache> | undefined
+}
+
+const frames = new Array<Frame | undefined>(FRAMES)
+let clockIndex = 0
+
+async function makeFrame(fileCache: FilePageCache, page: number): Promise<Frame> {
+	while (true) {
+		const frame = frames[clockIndex]
+		if (!frame) break
+
+		if (!frame.pinCount) {
+			if (!frame.accessed) break
+
+			frame.accessed = false
+		}
+		clockIndex = (clockIndex + 1) % FRAMES
+	}
+	let frame = frames[clockIndex]
+	if (frame) {
+		frame.pinCount = 1 // prevent another call from evicting the same frame
+		const {fileCache: {pages}, page} = frame
+		pages.delete(page)
+		await flushPage(frame)
+		frame.pinCount = 0
+	}
+	else {
+		frame = frames[clockIndex] = {
+			fileCache,
+			page,
+			contents: new Uint8Array(PAGE_SIZE).buffer as CacheBuffer,
+			pinCount: 0,
+			accessed: false
+		}
+	}
+	frame.contents.dirty = false
+	access(frame)
+	return frame
+}
+function access(frame: Frame): void {
+	frame.pinCount++
+	frame.accessed = true
 }
 
 const cache: PageCache = {}
@@ -46,49 +91,34 @@ function getFileCache(file: string): Promise<FilePageCache> {
 		}
 	})()
 }
-async function loadPage(file: string, page: number, create?: true): Promise<CacheBuffer> {
-	const {pages, fd} = await getFileCache(file)
+async function loadPage(file: string, page: number, create?: true): Promise<Frame> {
+	const fileCache = await getFileCache(file)
+	const {pages, fd} = fileCache
 	let pagePromise = pages.get(page)
-	if (!pagePromise) {
+	if (pagePromise) {
+		const cachedPage = await pagePromise
+		access(cachedPage)
+		return cachedPage
+	}
+	else {
 		pages.set(page, pagePromise = (async () => {
-			const data = new Uint8Array(PAGE_SIZE)
+			const frame = await makeFrame(fileCache, page)
+			const {contents} = frame
 			if (!create) {
-				const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
+				const {bytesRead} = await read(
+					fd, new Uint8Array(contents), 0, PAGE_SIZE, page << LOG_PAGE_SIZE
+				)
 				if (!bytesRead) throw new Error(`Page ${page} of file ${file} does not exist`)
 			}
-			const contents = data.buffer as CacheBuffer
-			contents.dirty = !!create
-			return {contents, pinCount: 0}
+			return frame
 		})())
+		return pagePromise
 	}
-	const cachedPage = await pagePromise
-	cachedPage.pinCount++
-	return cachedPage.contents
 }
 
-async function flushPage(
-	fd: number, page: number, contents: CacheBuffer
-): Promise<void> {
+async function flushPage({fileCache: {fd}, page, contents}: Frame): Promise<void> {
 	if (contents.dirty) {
 		await write(fd, new Uint8Array(contents), 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
-	}
-}
-
-async function releasePage(file: string, page: number): Promise<void> {
-	const fileCache = cache[file]
-	if (!fileCache) throw new Error(`File ${file} is not in cache`)
-	const {pages, fd} = await fileCache
-	const pagePromise = pages.get(page)
-	if (!pagePromise) {
-		throw new Error(`Page ${page} of file ${file} is not in cache`)
-	}
-
-	// Page can be evicted if nothing is currently using it
-	const cachedPage = await pagePromise
-	if (!--cachedPage.pinCount) {
-		// TODO: maintain a cache instead of immediately flushing pages
-		pages.delete(page)
-		await flushPage(fd, page, cachedPage.contents)
 	}
 }
 
@@ -101,12 +131,14 @@ export class FilePage {
 	constructor(readonly file: string, readonly page: number) {}
 
 	async use<T>(consumer: PageConsumer<T>, create?: true): Promise<T> {
-		const contents = await loadPage(this.file, this.page, create)
+		const frame = await loadPage(this.file, this.page, create)
+		const {contents} = frame
+		if (create) contents.dirty = true
 		try {
 			return await consumer(contents)
 		}
 		finally {
-			await releasePage(this.file, this.page)
+			--frame.pinCount
 		}
 	}
 	async create<T>(consumer: PageConsumer<T>): Promise<T> {
@@ -165,17 +197,16 @@ export async function setFile(file: string, contents: ArrayBuffer): Promise<void
 
 export async function shutdown(): Promise<void> {
 	const savePromises: Promise<void>[] = []
-	const fds: number[] = []
-	for (const file in cache) {
-		const {pages, fd} = await cache[file]!
-		for (const [page, pagePromise] of pages) {
-			savePromises.push((async () => {
-				const {contents} = await pagePromise
-				return flushPage(fd, page, contents)
-			})())
-		}
-		fds.push(fd)
+	for (const frame of frames) {
+		if (!frame) break
+
+		savePromises.push(flushPage(frame))
 	}
 	await Promise.all(savePromises)
-	await Promise.all(fds.map(fd => close(fd)))
+	const closePromises: Promise<void>[] = []
+	for (const file in cache) {
+		const {fd} = await cache[file]!
+		closePromises.push(close(fd))
+	}
+	await Promise.all(closePromises)
 }
