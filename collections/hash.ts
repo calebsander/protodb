@@ -8,6 +8,7 @@ import {
 	getPageNo,
 	getPageOffset,
 	PAGE_SIZE,
+	setPageCount,
 	removeFile
 } from '../cache'
 import {DATA_DIR} from '../constants'
@@ -60,15 +61,16 @@ function getHeader(name: string): Promise<Header> {
 	)
 }
 
-function setHeader(name: string, header: Header, create?: true): Promise<void> {
-	return new FilePage(directoryFilename(name), HEADER_PAGE).use(async page => {
+function setHeader(name: string, header: Header): Promise<void> {
+	return new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
 		new Uint8Array(page).set(new Uint8Array(headerType.valueBuffer(header)))
-		page.dirty = true
-	}, create)
+	)
 }
 
-function addBucket(name: string, page: number, bucket: Bucket): Promise<void> {
-	return new FilePage(bucketsFilename(name), page).create(async page =>
+async function addBucket(name: string, page: number, bucket: Bucket): Promise<void> {
+	const bucketsFile = bucketsFilename(name)
+	await setPageCount(bucketsFile, page + 1)
+	return new FilePage(bucketsFile, page).use(async page =>
 		new Uint8Array(page).set(new Uint8Array(bucketType.valueBuffer(bucket)))
 	)
 }
@@ -88,11 +90,10 @@ function getBucketPage(name: string, bucket: number): Promise<number> {
 }
 function setBucketPage(name: string, bucket: number, bucketPage: number): Promise<void> {
 	const {page, offset} = locateBucketIndex(bucket)
-	return new FilePage(directoryFilename(name), page).use(async page => {
+	return new FilePage(directoryFilename(name), page).use(async page =>
 		new Uint8Array(page, offset)
 			.set(new Uint8Array(bucketIndexType.valueBuffer(bucketPage)))
-		page.dirty = true
-	})
+	)
 }
 
 function getBucket(name: string, page: number): Promise<Bucket> {
@@ -102,10 +103,9 @@ function getBucket(name: string, page: number): Promise<Bucket> {
 }
 
 function setBucket(name: string, page: number, bucket: Bucket): Promise<void> {
-	return new FilePage(bucketsFilename(name), page).use(async page => {
+	return new FilePage(bucketsFilename(name), page).use(async page =>
 		new Uint8Array(page).set(new Uint8Array(bucketType.valueBuffer(bucket)))
-		page.dirty = true
-	})
+	)
 }
 
 async function extendDirectory(name: string, header: Header): Promise<void> {
@@ -117,23 +117,22 @@ async function extendDirectory(name: string, header: Header): Promise<void> {
 		// we are either copying within the first page, or duplicating whole pages
 		if (bucketIndexBytes < PAGE_SIZE) {
 			await new FilePage(directoryFile, DIRECTORY_START_PAGE)
-				.use(async page => {
+				.use(async page =>
 					new Uint8Array(page, bucketIndexBytes)
 						.set(new Uint8Array(page, 0, bucketIndexBytes))
-					page.dirty = true
-				})
+				)
 		}
 		else {
 			const copyPages = getPageNo(bucketIndexBytes)
+			await setPageCount(directoryFile, DIRECTORY_START_PAGE + (copyPages << 1))
 			const copyPromises: Promise<void>[] = []
 			for (let pageNo = 0; pageNo < copyPages; pageNo++) {
 				const sourcePage = DIRECTORY_START_PAGE + pageNo
 				copyPromises.push(
 					new FilePage(directoryFile, sourcePage).use(async page =>
-						new FilePage(directoryFile, sourcePage + copyPages)
-							.create(async newPage =>
-								new Uint8Array(newPage).set(new Uint8Array(page))
-							)
+						new FilePage(directoryFile, sourcePage + copyPages).use(async newPage =>
+							new Uint8Array(newPage).set(new Uint8Array(page))
+						)
 					)
 				)
 			}
@@ -149,9 +148,10 @@ export async function create(name: string): Promise<void> {
 	const initDirectory = async () => {
 		const directoryFile = directoryFilename(name)
 		await createFile(directoryFile)
+		await setPageCount(directoryFile, 2)
 		await Promise.all([
-			setHeader(name, {depth: INITIAL_DEPTH, size: 0}, true),
-			new FilePage(directoryFile, DIRECTORY_START_PAGE).create(async page =>
+			setHeader(name, {depth: INITIAL_DEPTH, size: 0}),
+			new FilePage(directoryFile, DIRECTORY_START_PAGE).use(async page =>
 				new Uint8Array(page).set(new Uint8Array(bucketIndexType.valueBuffer(0)))
 			)
 		])

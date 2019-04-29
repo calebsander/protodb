@@ -4,13 +4,16 @@
 	"description": "ProtoDB",
 	"main": "dist/index.js",
 	"scripts": {
-		"build": "tsc",
+		"build-ts": "tsc",
+		"build-napi": "node-gyp configure build && cp build/Release/mmap.node dist/mmap-wrapper.node",
+		"build": "npm run build-ts && npm run build-napi",
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"author": "Caleb Sander",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^11.13.0",
+		"node-gyp": "^4.0.0",
 		"typescript": "^3.4.2"
 	},
 	"dependencies": {

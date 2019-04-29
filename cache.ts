@@ -1,28 +1,19 @@
 import * as fs from 'fs'
 import {promisify} from 'util'
+import {LOG_PAGE_SIZE, PAGE_SIZE, mmap} from './mmap-wrapper'
+
+export {PAGE_SIZE}
 
 const close = promisify(fs.close),
       open = promisify(fs.open),
-      read = promisify(fs.read),
-      stat = promisify(fs.stat),
+      stat = promisify(fs.fstat),
       truncate = promisify(fs.ftruncate),
       unlink = promisify(fs.unlink),
-      write = promisify(fs.write),
-      writeFile = promisify(fs.writeFile)
+      writeFile = promisify(fs.writeFile),
+      mmapPromise = promisify(mmap)
 
-const LOG_PAGE_SIZE = 12
-export const PAGE_SIZE = 1 << LOG_PAGE_SIZE // 4096 bytes
-const EMPTY = new Uint8Array(0)
-
-interface CacheBuffer extends ArrayBuffer {
-	dirty: boolean // TODO: can this be tracked automatically?
-}
-interface CachedPage {
-	contents: CacheBuffer
-	pinCount: number
-}
 interface FilePageCache {
-	pages: Map<number, Promise<CachedPage>>
+	pages: Map<number, Promise<ArrayBuffer>>
 	fd: number
 }
 interface PageCache {
@@ -31,13 +22,13 @@ interface PageCache {
 
 const cache: PageCache = {}
 
-function getFileCache(file: string): Promise<FilePageCache> {
+function getFileCache(file: string, create?: true): Promise<FilePageCache> {
 	const fileCache = cache[file]
 	if (fileCache) return fileCache
 
 	return cache[file] = (async () => {
 		try {
-			const fd = await open(file, 'r+')
+			const fd = await open(file, create ? 'a+' : 'r+')
 			return {pages: new Map, fd}
 		}
 		catch (e) {
@@ -46,88 +37,48 @@ function getFileCache(file: string): Promise<FilePageCache> {
 		}
 	})()
 }
-async function loadPage(file: string, page: number, create?: true): Promise<CacheBuffer> {
+async function loadPage(file: string, page: number): Promise<ArrayBuffer> {
 	const {pages, fd} = await getFileCache(file)
 	let pagePromise = pages.get(page)
 	if (!pagePromise) {
-		pages.set(page, pagePromise = (async () => {
-			const data = new Uint8Array(PAGE_SIZE)
-			if (!create) {
-				const {bytesRead} = await read(fd, data, 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
-				if (!bytesRead) throw new Error(`Page ${page} of file ${file} does not exist`)
-			}
-			const contents = data.buffer as CacheBuffer
-			contents.dirty = !!create
-			return {contents, pinCount: 0}
-		})())
+		pages.set(page, pagePromise = mmapPromise(fd, page << LOG_PAGE_SIZE))
 	}
-	const cachedPage = await pagePromise
-	cachedPage.pinCount++
-	return cachedPage.contents
-}
-
-async function flushPage(
-	fd: number, page: number, contents: CacheBuffer
-): Promise<void> {
-	if (contents.dirty) {
-		await write(fd, new Uint8Array(contents), 0, PAGE_SIZE, page << LOG_PAGE_SIZE)
-	}
-}
-
-async function releasePage(file: string, page: number): Promise<void> {
-	const fileCache = cache[file]
-	if (!fileCache) throw new Error(`File ${file} is not in cache`)
-	const {pages, fd} = await fileCache
-	const pagePromise = pages.get(page)
-	if (!pagePromise) {
-		throw new Error(`Page ${page} of file ${file} is not in cache`)
-	}
-
-	// Page can be evicted if nothing is currently using it
-	const cachedPage = await pagePromise
-	if (!--cachedPage.pinCount) {
-		// TODO: maintain a cache instead of immediately flushing pages
-		pages.delete(page)
-		await flushPage(fd, page, cachedPage.contents)
-	}
+	return pagePromise
 }
 
 export const getPageNo = (byte: number) => byte >> LOG_PAGE_SIZE
 export const getPageOffset = (byte: number) => byte & (PAGE_SIZE - 1)
 
-type PageConsumer<T> = (page: CacheBuffer) => Promise<T>
+type PageConsumer<T> = (page: ArrayBuffer) => Promise<T>
 
 export class FilePage {
 	constructor(readonly file: string, readonly page: number) {}
 
-	async use<T>(consumer: PageConsumer<T>, create?: true): Promise<T> {
-		const contents = await loadPage(this.file, this.page, create)
-		try {
-			return await consumer(contents)
-		}
-		finally {
-			await releasePage(this.file, this.page)
-		}
-	}
-	async create<T>(consumer: PageConsumer<T>): Promise<T> {
-		return this.use(consumer, true)
+	async use<T>(consumer: PageConsumer<T>): Promise<T> {
+		const contents = await loadPage(this.file, this.page)
+		return consumer(contents)
 	}
 }
 
-export function createFile(file: string): Promise<void> {
-	return writeFile(file, EMPTY, {flag: 'wx'})
+export const createFile = (file: string): Promise<void> =>
+	writeFile(file, '', {flag: 'wx'})
+export async function setPageCount(file: string, pages: number): Promise<void> {
+	const {fd} = await getFileCache(file)
+	await truncate(fd, pages << LOG_PAGE_SIZE)
 }
 export async function removeFile(file: string): Promise<void> {
-	const pagePromise = cache[file]
-	if (pagePromise) {
+	const promises = [unlink(file)]
+	const fileCache = cache[file]
+	if (fileCache) {
 		delete cache[file]
-		const {fd} = await pagePromise
-		await close(fd)
+		const {fd} = await fileCache
+		promises.push(close(fd))
 	}
-	return unlink(file)
+	await Promise.all(promises)
 }
 export async function getPageCount(file: string): Promise<number> {
-	const {size} = await stat(file)
+	const {fd} = await getFileCache(file)
+	const {size} = await stat(fd)
 	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
 	return getPageNo(size)
 }
@@ -144,17 +95,13 @@ export async function getFile(file: string): Promise<ArrayBuffer> {
 	return result.buffer
 }
 export async function setFile(file: string, contents: ArrayBuffer): Promise<void> {
-	try {
-		const {fd} = await getFileCache(file)
-		await truncate(fd, 0)
-	}
-	catch {
-		await createFile(file)
-	}
+	const {fd} = await getFileCache(file, true)
+	const newPages = getPageNo(contents.byteLength + PAGE_SIZE - 1)
+	await truncate(fd, newPages << LOG_PAGE_SIZE)
 	const pagePromises: Promise<void>[] = []
 	const {byteLength} = contents
 	for (let offset = 0, pageNo = 0; offset < byteLength; offset += PAGE_SIZE, pageNo++) {
-		pagePromises.push(new FilePage(file, pageNo).create(async page =>
+		pagePromises.push(new FilePage(file, pageNo).use(async page =>
 			new Uint8Array(page).set(
 				new Uint8Array(contents, offset, Math.min(PAGE_SIZE, byteLength - offset))
 			)
@@ -164,18 +111,11 @@ export async function setFile(file: string, contents: ArrayBuffer): Promise<void
 }
 
 export async function shutdown(): Promise<void> {
-	const savePromises: Promise<void>[] = []
-	const fds: number[] = []
+	const closePromises: Promise<void>[] = []
 	for (const file in cache) {
 		const {pages, fd} = await cache[file]!
-		for (const [page, pagePromise] of pages) {
-			savePromises.push((async () => {
-				const {contents} = await pagePromise
-				return flushPage(fd, page, contents)
-			})())
-		}
-		fds.push(fd)
+		pages.clear()
+		closePromises.push(close(fd))
 	}
-	await Promise.all(savePromises)
-	await Promise.all(fds.map(fd => close(fd)))
+	await Promise.all(closePromises)
 }
