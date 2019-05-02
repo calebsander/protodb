@@ -15,19 +15,18 @@ export interface BucketItem {
 	key: ArrayBuffer
 	value: ArrayBuffer
 }
+export const bucketItemType = new sb.StructType<BucketItem>({
+	key: new sb.OctetsType,
+	value: new sb.OctetsType
+})
+
 export interface Bucket {
 	depth: number
 	items: BucketItem[]
 }
-
 export const bucketType = new sb.StructType<Bucket>({
 	depth: depthType,
-	items: new sb.ArrayType(
-		new sb.StructType({
-			key: new sb.OctetsType,
-			value: new sb.OctetsType
-		})
-	)
+	items: new sb.ArrayType(bucketItemType)
 })
 
 /*

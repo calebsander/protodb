@@ -1,5 +1,7 @@
 import * as sb from 'structure-bytes'
+import {ITER_BYTE_LENGTH} from '../collections/hash'
 import {literalType} from './common'
+import {BucketItem, bucketItemType} from './hash'
 
 interface ListCommand {
 	type: 'list'
@@ -75,11 +77,9 @@ const hashGetCommandType = new sb.StructType<HashGetCommand>({
 	key: new sb.OctetsType
 })
 
-export interface HashSetCommand {
+export interface HashSetCommand extends BucketItem {
 	type: 'hash_set'
 	name: string
-	key: ArrayBuffer
-	value: ArrayBuffer
 }
 const hashSetCommandType = new sb.StructType<HashSetCommand>({
 	type: literalType('hash_set'),
@@ -108,6 +108,39 @@ const hashSizeCommandType = new sb.StructType<HashSizeCommand>({
 	name: new sb.StringType
 })
 
+export interface HashIterCommand {
+	type: 'hash_iter'
+	name: string
+}
+const hashIterCommandType = new sb.StructType<HashIterCommand>({
+	type: literalType('hash_iter'),
+	name: new sb.StringType
+})
+
+type Iter = number[]
+const iterType: sb.Type<Iter> = new sb.TupleType({
+	type: new sb.UnsignedByteType,
+	length: ITER_BYTE_LENGTH
+})
+
+export interface HashIterNextCommand {
+	type: 'hash_iter_next'
+	iter: Iter
+}
+const hashIterNextCommandType = new sb.StructType<HashIterNextCommand>({
+	type: literalType('hash_iter_next'),
+	iter: iterType
+})
+
+export interface HashIterBreakCommand {
+	type: 'hash_iter_break'
+	iter: Iter
+}
+const hashIterBreakCommandType = new sb.StructType<HashIterBreakCommand>({
+	type: literalType('hash_iter_break'),
+	iter: iterType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
@@ -120,6 +153,9 @@ export type Command
 	| HashSetCommand
 	| HashDeleteCommand
 	| HashSizeCommand
+	| HashIterCommand
+	| HashIterNextCommand
+	| HashIterBreakCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
@@ -131,16 +167,25 @@ export const commandType = new sb.ChoiceType<Command>([
 	hashGetCommandType,
 	hashSetCommandType,
 	hashDeleteCommandType,
-	hashSizeCommandType
+	hashSizeCommandType,
+	hashIterCommandType,
+	hashIterNextCommandType,
+	hashIterBreakCommandType
 ])
 
 type ErrorResponse<A> = {error: string} | A
 const errorType = new sb.StructType({error: new sb.StringType})
 
-export type VoidResponse = ErrorResponse<{}>
-export const voidReponseType = new sb.ChoiceType<VoidResponse>([
+export type BytesResponse = ErrorResponse<{data: ArrayBuffer}>
+export const bytesResponseType = new sb.ChoiceType<BytesResponse>([
 	errorType,
-	new sb.StructType({})
+	new sb.StructType({data: new sb.OctetsType})
+])
+
+export type IterResponse = ErrorResponse<{iter: Iter}>
+export const iterResponseType = new sb.ChoiceType<IterResponse>([
+	errorType,
+	new sb.StructType({iter: iterType})
 ])
 
 export type CollectionType
@@ -169,12 +214,6 @@ export const listReponseType = new sb.ChoiceType<ListResponse>([
 	})
 ])
 
-export type BytesResponse = ErrorResponse<{data: ArrayBuffer}>
-export const bytesResponseType = new sb.ChoiceType<BytesResponse>([
-	errorType,
-	new sb.StructType({data: new sb.OctetsType})
-])
-
 export type OptionalBytesResponse = ErrorResponse<{data: ArrayBuffer | null}>
 export const optionalBytesResponseType = new sb.ChoiceType<OptionalBytesResponse>([
 	errorType,
@@ -183,8 +222,22 @@ export const optionalBytesResponseType = new sb.ChoiceType<OptionalBytesResponse
 	})
 ])
 
+export type OptionalPairResponse = ErrorResponse<{item: BucketItem | null}>
+export const optionalPairResponseType = new sb.ChoiceType<OptionalPairResponse>([
+	errorType,
+	new sb.StructType<OptionalPairResponse>({
+		item: new sb.OptionalType(bucketItemType)
+	})
+])
+
 export type UnsignedResponse = ErrorResponse<{value: number}>
 export const unsignedResponseType = new sb.ChoiceType<UnsignedResponse>([
 	errorType,
 	new sb.StructType<UnsignedResponse>({value: new sb.FlexUnsignedIntType})
+])
+
+export type VoidResponse = ErrorResponse<{}>
+export const voidReponseType = new sb.ChoiceType<VoidResponse>([
+	errorType,
+	new sb.StructType({})
 ])

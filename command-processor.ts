@@ -1,38 +1,15 @@
 import {getCollections} from './collections'
 import * as item from './collections/item'
 import * as hash from './collections/hash'
-import {
-	Collection,
-	commandType,
-	ItemCreateCommand,
-	ItemDropCommand,
-	ItemGetCommand,
-	ItemSetCommand,
-	HashCreateCommand,
-	HashDropCommand,
-	HashGetCommand,
-	HashSetCommand,
-	HashDeleteCommand,
-	HashSizeCommand,
-	BytesResponse,
-	ListResponse,
-	OptionalBytesResponse,
-	UnsignedResponse,
-	VoidResponse,
-	bytesResponseType,
-	listReponseType,
-	optionalBytesResponseType,
-	unsignedResponseType,
-	voidReponseType
-} from './sb-types/request'
+import * as types from './sb-types/request'
 
 const errorToString = ({name, message}: Error) =>
 	({error: `${name}: ${message}`})
 
-async function runList(): Promise<ListResponse> {
+async function runList(): Promise<types.ListResponse> {
 	try {
 		const dbCollections = await getCollections()
-		const collections: Collection[] = []
+		const collections: types.Collection[] = []
 		for (const [name, {type}] of dbCollections) collections.push({name, type})
 		return {collections}
 	}
@@ -40,82 +17,107 @@ async function runList(): Promise<ListResponse> {
 		return errorToString(e)
 	}
 }
-function runItemCreate({name}: ItemCreateCommand): Promise<VoidResponse> {
-	return item.create(name)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runItemDrop({name}: ItemDropCommand): Promise<VoidResponse> {
-	return item.drop(name)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runItemGet({name}: ItemGetCommand): Promise<BytesResponse> {
-	return item.get(name)
-		.then(data => ({data}))
-		.catch(errorToString)
-}
-function runItemSet({name, value}: ItemSetCommand): Promise<VoidResponse> {
-	return item.set(name, value)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runHashCreate({name}: HashCreateCommand): Promise<VoidResponse> {
-	return hash.create(name)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runHashDrop({name}: HashDropCommand): Promise<VoidResponse> {
-	return hash.drop(name)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runHashGet({name, key}: HashGetCommand): Promise<OptionalBytesResponse> {
-	return hash.get(name, key)
-		.then(data => ({data}))
-		.catch(errorToString)
-}
-function runHashSet({name, key, value}: HashSetCommand): Promise<VoidResponse> {
-	return hash.set(name, key, value)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runHashDelete({name, key}: HashDeleteCommand): Promise<VoidResponse> {
-	return hash.remove(name, key)
-		.then(_ => ({}))
-		.catch(errorToString)
-}
-function runHashSize({name}: HashSizeCommand): Promise<UnsignedResponse> {
-	return hash.size(name)
-		.then(value => ({value}))
-		.catch(errorToString)
+const runItemCreate =
+	({name}: types.ItemCreateCommand): Promise<types.VoidResponse> =>
+		item.create(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runItemDrop =
+	({name}: types.ItemDropCommand): Promise<types.VoidResponse> =>
+		item.drop(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runItemGet =
+	({name}: types.ItemGetCommand): Promise<types.BytesResponse> =>
+		item.get(name)
+			.then(data => ({data}))
+			.catch(errorToString)
+const runItemSet =
+	({name, value}: types.ItemSetCommand): Promise<types.VoidResponse> =>
+		item.set(name, value)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runHashCreate =
+	({name}: types.HashCreateCommand): Promise<types.VoidResponse> =>
+		hash.create(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runHashDrop =
+	({name}: types.HashDropCommand): Promise<types.VoidResponse> =>
+		hash.drop(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runHashGet =
+	({name, key}: types.HashGetCommand): Promise<types.OptionalBytesResponse> =>
+		hash.get(name, key)
+			.then(data => ({data}))
+			.catch(errorToString)
+const runHashSet =
+	({name, key, value}: types.HashSetCommand): Promise<types.VoidResponse> =>
+		hash.set(name, key, value)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runHashDelete =
+	({name, key}: types.HashDeleteCommand): Promise<types.VoidResponse> =>
+		hash.remove(name, key)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runHashSize =
+	({name}: types.HashSizeCommand): Promise<types.UnsignedResponse> =>
+		hash.size(name)
+			.then(value => ({value}))
+			.catch(errorToString)
+const runHashIter =
+	({name}: types.HashIterCommand): Promise<types.IterResponse> =>
+		hash.iter(name)
+			.then(iter => ({iter}))
+			.catch(errorToString)
+const runHashIterNext =
+	({iter}: types.HashIterNextCommand): Promise<types.OptionalPairResponse> =>
+		hash.iterNext(iter)
+			.then(item => ({item}))
+			.catch(errorToString)
+function runHashIterBreak({iter}: types.HashIterBreakCommand): types.VoidResponse {
+	try {
+		hash.iterBreak(iter)
+		return {}
+	}
+	catch (e) {
+		return errorToString(e)
+	}
 }
 
 export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
-	const command = commandType.readValue(data)
+	const command = types.commandType.readValue(data)
 	switch (command.type) {
 		case 'list':
-			return listReponseType.valueBuffer(await runList())
+			return types.listReponseType.valueBuffer(await runList())
 		case 'item_create':
-			return voidReponseType.valueBuffer(await runItemCreate(command))
+			return types.voidReponseType.valueBuffer(await runItemCreate(command))
 		case 'item_drop':
-			return voidReponseType.valueBuffer(await runItemDrop(command))
+			return types.voidReponseType.valueBuffer(await runItemDrop(command))
 		case 'item_get':
-			return bytesResponseType.valueBuffer(await runItemGet(command))
+			return types.bytesResponseType.valueBuffer(await runItemGet(command))
 		case 'item_set':
-			return voidReponseType.valueBuffer(await runItemSet(command))
+			return types.voidReponseType.valueBuffer(await runItemSet(command))
 		case 'hash_create':
-			return voidReponseType.valueBuffer(await runHashCreate(command))
+			return types.voidReponseType.valueBuffer(await runHashCreate(command))
 		case 'hash_drop':
-			return voidReponseType.valueBuffer(await runHashDrop(command))
+			return types.voidReponseType.valueBuffer(await runHashDrop(command))
 		case 'hash_get':
-			return optionalBytesResponseType.valueBuffer(await runHashGet(command))
+			return types.optionalBytesResponseType.valueBuffer(await runHashGet(command))
 		case 'hash_set':
-			return voidReponseType.valueBuffer(await runHashSet(command))
+			return types.voidReponseType.valueBuffer(await runHashSet(command))
 		case 'hash_delete':
-			return voidReponseType.valueBuffer(await runHashDelete(command))
+			return types.voidReponseType.valueBuffer(await runHashDelete(command))
 		case 'hash_size':
-			return unsignedResponseType.valueBuffer(await runHashSize(command))
+			return types.unsignedResponseType.valueBuffer(await runHashSize(command))
+		case 'hash_iter':
+			return types.iterResponseType.valueBuffer(await runHashIter(command))
+		case 'hash_iter_next':
+			return types.optionalPairResponseType.valueBuffer(await runHashIterNext(command))
+		case 'hash_iter_break':
+			return types.voidReponseType.valueBuffer(runHashIterBreak(command))
 		default:
 			const unreachable: never = command
 			unreachable
