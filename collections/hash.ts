@@ -55,17 +55,15 @@ async function checkIsHash(name: string): Promise<void> {
 	}
 }
 
-function getHeader(name: string): Promise<Header> {
-	return new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
+const getHeader = (name: string): Promise<Header> =>
+	new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
 		headerType.consumeValue(page, 0).value
 	)
-}
 
-function setHeader(name: string, header: Header): Promise<void> {
-	return new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
+const setHeader = (name: string, header: Header): Promise<void> =>
+	new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
 		new Uint8Array(page).set(new Uint8Array(headerType.valueBuffer(header)))
 	)
-}
 
 async function addBucket(name: string, page: number, bucket: Bucket): Promise<void> {
 	const bucketsFile = bucketsFilename(name)
@@ -96,17 +94,15 @@ function setBucketPage(name: string, bucket: number, bucketPage: number): Promis
 	)
 }
 
-function getBucket(name: string, page: number): Promise<Bucket> {
-	return new FilePage(bucketsFilename(name), page).use(async page =>
+const getBucket = (name: string, page: number): Promise<Bucket> =>
+	new FilePage(bucketsFilename(name), page).use(async page =>
 		bucketType.consumeValue(page, 0).value
 	)
-}
 
-function setBucket(name: string, page: number, bucket: Bucket): Promise<void> {
-	return new FilePage(bucketsFilename(name), page).use(async page =>
+const setBucket = (name: string, page: number, bucket: Bucket): Promise<void> =>
+	new FilePage(bucketsFilename(name), page).use(async page =>
 		new Uint8Array(page).set(new Uint8Array(bucketType.valueBuffer(bucket)))
 	)
-}
 
 async function extendDirectory(name: string, header: Header): Promise<void> {
 	const {depth} = header

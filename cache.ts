@@ -55,8 +55,7 @@ export class FilePage {
 	constructor(readonly file: string, readonly page: number) {}
 
 	async use<T>(consumer: PageConsumer<T>): Promise<T> {
-		const contents = await loadPage(this.file, this.page)
-		return consumer(contents)
+		return consumer(await loadPage(this.file, this.page))
 	}
 }
 
@@ -64,7 +63,7 @@ export const createFile = (file: string): Promise<void> =>
 	writeFile(file, '', {flag: 'wx'})
 export async function setPageCount(file: string, pages: number): Promise<void> {
 	const {fd} = await getFileCache(file)
-	await truncate(fd, pages << LOG_PAGE_SIZE)
+	return truncate(fd, pages << LOG_PAGE_SIZE)
 }
 export async function removeFile(file: string): Promise<void> {
 	const promises = [unlink(file)]
