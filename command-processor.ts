@@ -1,6 +1,7 @@
 import {getCollections} from './collections'
 import * as item from './collections/item'
 import * as hash from './collections/hash'
+import * as list from './collections/list'
 import * as types from './sb-types/request'
 
 const errorToString = ({name, message}: Error) =>
@@ -86,6 +87,31 @@ function runHashIterBreak({iter}: types.HashIterBreakCommand): types.VoidRespons
 		return errorToString(e)
 	}
 }
+const runListCreate =
+	({name}: types.ListCreateCommand): Promise<types.VoidResponse> =>
+		list.create(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runListDrop =
+	({name}: types.ListDropCommand): Promise<types.VoidResponse> =>
+		list.drop(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runListGet =
+	({name, index}: types.ListGetCommand): Promise<types.BytesResponse> =>
+		list.get(name, index)
+			.then(data => ({data}))
+			.catch(errorToString)
+const runListSet =
+	({name, index, value}: types.ListSetCommand): Promise<types.VoidResponse> =>
+		list.set(name, index, value)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runListInsert =
+	({name, index, value}: types.ListInsertCommand): Promise<types.VoidResponse> =>
+		list.insert(name, index, value)
+			.then(_ => ({}))
+			.catch(errorToString)
 
 export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 	const command = types.commandType.readValue(data)
@@ -118,6 +144,16 @@ export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
 			return types.optionalPairResponseType.valueBuffer(await runHashIterNext(command))
 		case 'hash_iter_break':
 			return types.voidReponseType.valueBuffer(runHashIterBreak(command))
+		case 'list_create':
+			return types.voidReponseType.valueBuffer(await runListCreate(command))
+		case 'list_drop':
+			return types.voidReponseType.valueBuffer(await runListDrop(command))
+		case 'list_get':
+			return types.bytesResponseType.valueBuffer(await runListGet(command))
+		case 'list_set':
+			return types.voidReponseType.valueBuffer(await runListSet(command))
+		case 'list_insert':
+			return types.voidReponseType.valueBuffer(await runListInsert(command))
 		default:
 			const unreachable: never = command
 			unreachable

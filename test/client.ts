@@ -175,6 +175,68 @@ async function processCommands() {
 					responseType = voidReponseType
 					break
 				}
+				case 'list_create': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {type, name}
+					responseType = voidReponseType
+					break
+				}
+				case 'list_drop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {type, name}
+					responseType = voidReponseType
+					break
+				}
+				case 'list_get': {
+					const [name, index, typeFile]: (string | undefined)[] = args.slice(1)
+					if (!(name && index && typeFile)) {
+						throw new Error(`Syntax: ${type} name index type_file`)
+					}
+					command = {type, name, index: Number(index)}
+					responseType = bytesResponseType
+					bytesType = await readType(fs.createReadStream(typeFile))
+					break
+				}
+				case 'list_set': {
+					const [name, index, typeFile, value]: (string | undefined)[] = args.slice(1)
+					if (!(name && index && typeFile && value)) {
+						throw new Error(`Syntax: ${type} name index type_file value`)
+					}
+					const valueType = await readType(fs.createReadStream(typeFile))
+					command = {
+						type,
+						index: Number(index),
+						name,
+						value: valueType.valueBuffer(JSON.parse(value))
+					}
+					responseType = voidReponseType
+					break
+				}
+				case 'list_insert': {
+					const insertArguments = args.slice(1)
+					let name: string, index: string | undefined, typeFile: string, value: string
+					switch (insertArguments.length) {
+						case 3:
+							[name, typeFile, value] = insertArguments
+							break
+						case 4:
+							[name, index, typeFile, value] = insertArguments
+							break
+						default:
+							throw new Error(`Syntax: ${type} name [index] type_file value`)
+					}
+					const valueType = await readType(fs.createReadStream(typeFile))
+					command = {
+						type,
+						index: index ? Number(index) : null,
+						name,
+						value: valueType.valueBuffer(JSON.parse(value))
+					}
+					responseType = voidReponseType
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}

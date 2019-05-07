@@ -20,9 +20,8 @@ export async function getCollections(): Promise<Collections> {
 	if (!cachedCollections) cachedCollections = collections
 	return cachedCollections
 }
-function saveCollections(): Promise<void> {
-	return setFile(DB_FILE, dbType.valueBuffer({collections: cachedCollections!}))
-}
+const saveCollections = (): Promise<void> =>
+	setFile(DB_FILE, dbType.valueBuffer({collections: cachedCollections!}))
 export async function addCollection(name: string, collection: CollectionType): Promise<void> {
 	if (cachedCollections!.has(name)) {
 		throw new Error(`Collection ${name} already exists`)
@@ -30,7 +29,7 @@ export async function addCollection(name: string, collection: CollectionType): P
 	cachedCollections!.set(name, collection)
 	return saveCollections()
 }
-export function dropCollection(name: string) {
+export async function dropCollection(name: string): Promise<void> {
 	if (!cachedCollections!.has(name)) {
 		throw new Error(`Collection ${name} does not exist`)
 	}

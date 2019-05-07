@@ -141,6 +141,61 @@ const hashIterBreakCommandType = new sb.StructType<HashIterBreakCommand>({
 	iter: iterType
 })
 
+export interface ListCreateCommand {
+	type: 'list_create'
+	name: string
+}
+const listCreateCommandType = new sb.StructType<ListCreateCommand>({
+	type: literalType('list_create'),
+	name: new sb.StringType
+})
+
+export interface ListDropCommand {
+	type: 'list_drop'
+	name: string
+}
+const listDropCommandType = new sb.StructType<ListDropCommand>({
+	type: literalType('list_drop'),
+	name: new sb.StringType
+})
+
+export interface ListGetCommand {
+	type: 'list_get'
+	name: string
+	index: number
+}
+const listGetCommandType = new sb.StructType<ListGetCommand>({
+	type: literalType('list_get'),
+	name: new sb.StringType,
+	index: new sb.FlexIntType
+})
+
+export interface ListSetCommand {
+	type: 'list_set'
+	name: string
+	index: number
+	value: ArrayBuffer
+}
+const listSetCommandType = new sb.StructType<ListSetCommand>({
+	type: literalType('list_set'),
+	name: new sb.StringType,
+	index: new sb.FlexIntType,
+	value: new sb.OctetsType
+})
+
+export interface ListInsertCommand {
+	type: 'list_insert'
+	name: string
+	index: number | null
+	value: ArrayBuffer
+}
+const listInsertCommandType = new sb.StructType<ListInsertCommand>({
+	type: literalType('list_insert'),
+	name: new sb.StringType,
+	index: new sb.OptionalType(new sb.FlexIntType),
+	value: new sb.OctetsType
+})
+
 export type Command
 	= ListCommand
 	| ItemCreateCommand
@@ -156,6 +211,11 @@ export type Command
 	| HashIterCommand
 	| HashIterNextCommand
 	| HashIterBreakCommand
+	| ListCreateCommand
+	| ListDropCommand
+	| ListGetCommand
+	| ListSetCommand
+	| ListInsertCommand
 export const commandType = new sb.ChoiceType<Command>([
 	listCommandType,
 	itemCreateCommandType,
@@ -170,7 +230,12 @@ export const commandType = new sb.ChoiceType<Command>([
 	hashSizeCommandType,
 	hashIterCommandType,
 	hashIterNextCommandType,
-	hashIterBreakCommandType
+	hashIterBreakCommandType,
+	listCreateCommandType,
+	listDropCommandType,
+	listGetCommandType,
+	listSetCommandType,
+	listInsertCommandType
 ])
 
 type ErrorResponse<A> = {error: string} | A
@@ -191,6 +256,7 @@ export const iterResponseType = new sb.ChoiceType<IterResponse>([
 export type CollectionType
 	= 'item'
 	| 'hash'
+	| 'list'
 export interface Collection {
 	name: string
 	type: CollectionType
@@ -207,7 +273,7 @@ export const listReponseType = new sb.ChoiceType<ListResponse>([
 				name: new sb.StringType,
 				type: new sb.EnumType({
 					type: new sb.StringType as sb.Type<CollectionType>,
-					values: ['item', 'hash']
+					values: ['item', 'hash', 'list']
 				})
 			})
 		)

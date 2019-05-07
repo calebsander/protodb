@@ -11,12 +11,19 @@ interface HashType {
 }
 const hashType = new sb.StructType<HashType>({type: literalType('hash')})
 
+interface ListType {
+	type: 'list'
+}
+const listType = new sb.StructType<ListType>({type: literalType('list')})
+
 export type CollectionType
 	= ItemType
 	| HashType
+	| ListType
 const collectionType = new sb.ChoiceType<CollectionType>([
 	itemType,
-	hashType
+	hashType,
+	listType
 ])
 
 export type Collections = Map<string, CollectionType>

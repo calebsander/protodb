@@ -22,7 +22,7 @@ interface PageCache {
 
 const cache: PageCache = {}
 
-function getFileCache(file: string, create?: true): Promise<FilePageCache> {
+function getFileCache(file: string, create = false): Promise<FilePageCache> {
 	const fileCache = cache[file]
 	if (fileCache) return fileCache
 
