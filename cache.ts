@@ -81,8 +81,7 @@ export async function getPageCount(file: string): Promise<number> {
 	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
 	return getPageNo(size)
 }
-// TODO: could getFile() and setFile() use Uint8Array instead for protobufjs?
-export async function getFile(file: string): Promise<ArrayBuffer> {
+export async function getFile(file: string): Promise<Uint8Array> {
 	const pages = await getPageCount(file)
 	const result = new Uint8Array(pages << LOG_PAGE_SIZE)
 	const pagePromises: Promise<void>[] = []
@@ -92,9 +91,9 @@ export async function getFile(file: string): Promise<ArrayBuffer> {
 		))
 	}
 	await Promise.all(pagePromises)
-	return result.buffer
+	return result
 }
-export async function setFile(file: string, contents: ArrayBuffer): Promise<void> {
+export async function setFile(file: string, contents: Uint8Array): Promise<void> {
 	const {fd} = await getFileCache(file, true)
 	const newPages = getPageNo(contents.byteLength + PAGE_SIZE - 1)
 	await truncate(fd, newPages << LOG_PAGE_SIZE)
@@ -102,9 +101,7 @@ export async function setFile(file: string, contents: ArrayBuffer): Promise<void
 	const {byteLength} = contents
 	for (let offset = 0, pageNo = 0; offset < byteLength; offset += PAGE_SIZE, pageNo++) {
 		pagePromises.push(new FilePage(file, pageNo).use(async page =>
-			new Uint8Array(page).set(
-				new Uint8Array(contents, offset, Math.min(PAGE_SIZE, byteLength - offset))
-			)
+			new Uint8Array(page).set(contents.subarray(offset, offset + PAGE_SIZE))
 		))
 	}
 	await Promise.all(pagePromises)

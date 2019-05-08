@@ -2,24 +2,15 @@ import * as path from 'path'
 import {DATA_DIR} from '../constants'
 import {getFile, setFile} from '../cache'
 import {CollectionType, Collections, dbType} from '../pb/db'
-import {toArrayBuffer} from '../util'
 
 const DB_FILE = path.join(DATA_DIR, 'db')
 
-export const getCollections = (async (): Promise<Collections> => {
-	try {
-		const dbFile = await getFile(DB_FILE)
-		return dbType.toObject(dbType.decode(new Uint8Array(dbFile))).collections
-	}
-	catch (e) {
-		return {}
-	}
-})()
+export const getCollections = getFile(DB_FILE)
+	.then(file => dbType.toObject(dbType.decode(file)).collections)
+	.catch<Collections>(_ => ({}))
 async function saveCollections(): Promise<void> {
 	const collections = await getCollections
-	await setFile(DB_FILE, toArrayBuffer(
-		dbType.encode(dbType.fromObject({collections})).finish()
-	))
+	await setFile(DB_FILE, dbType.encode(dbType.fromObject({collections})).finish())
 }
 export async function addCollection(
 	name: string, collection: CollectionType

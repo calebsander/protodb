@@ -3,6 +3,7 @@ import * as item from './collections/item'
 import * as hash from './collections/hash'
 import * as list from './collections/list'
 import * as types from './sb-types/request'
+import {toArrayBuffer} from './util'
 
 const errorToString = ({name, message}: Error) =>
 	({error: `${name}: ${message}`})
@@ -38,11 +39,11 @@ const runItemDrop =
 const runItemGet =
 	({name}: types.ItemGetCommand): Promise<types.BytesResponse> =>
 		item.get(name)
-			.then(data => ({data}))
+			.then(data => ({data: toArrayBuffer(data)}))
 			.catch(errorToString)
 const runItemSet =
 	({name, value}: types.ItemSetCommand): Promise<types.VoidResponse> =>
-		item.set(name, value)
+		item.set(name, new Uint8Array(value))
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashCreate =

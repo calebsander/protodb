@@ -2,7 +2,7 @@ import * as path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
 import {getFile, removeFile, setFile} from '../cache'
 import {DATA_DIR} from '../constants'
-import {itemType} from '../sb-types/item'
+import {itemType} from '../pb/item'
 
 const COLLECTION_TYPE = 'item'
 
@@ -30,17 +30,20 @@ export async function drop(name: string): Promise<void> {
 	])
 }
 
-export async function get(name: string): Promise<ArrayBuffer> {
+export async function get(name: string): Promise<Uint8Array> {
 	await checkIsItem(name)
+	let contents: Uint8Array
 	try {
-		return itemType.consumeValue(await getFile(filename(name)), 0).value
+		contents = await getFile(filename(name))
 	}
 	catch {
 		throw new Error(`Collection ${name} has not been set`)
 	}
+	return itemType.toObject(itemType.decodeDelimited(contents)).value
 }
 
-export async function set(name: string, value: ArrayBuffer): Promise<void> {
+export async function set(name: string, value: Uint8Array): Promise<void> {
 	await checkIsItem(name)
-	await setFile(filename(name), itemType.valueBuffer(value))
+	const writer = itemType.encodeDelimited(itemType.fromObject({value}))
+	await setFile(filename(name), writer.finish())
 }
