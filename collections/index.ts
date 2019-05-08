@@ -6,11 +6,15 @@ import {CollectionType, Collections, dbType} from '../pb/db'
 const DB_FILE = path.join(DATA_DIR, 'db')
 
 export const getCollections = getFile(DB_FILE)
-	.then(file => dbType.toObject(dbType.decode(file)).collections)
+	.then(contents => {
+		const message = dbType.decodeDelimited(contents)
+		return dbType.toObject(message, {defaults: true}).collections
+	})
 	.catch<Collections>(_ => ({}))
 async function saveCollections(): Promise<void> {
 	const collections = await getCollections
-	await setFile(DB_FILE, dbType.encode(dbType.fromObject({collections})).finish())
+	const message = dbType.fromObject({collections})
+	await setFile(DB_FILE, dbType.encodeDelimited(message).finish())
 }
 export async function addCollection(
 	name: string, collection: CollectionType

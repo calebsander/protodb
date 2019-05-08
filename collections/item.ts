@@ -39,7 +39,8 @@ export async function get(name: string): Promise<Uint8Array> {
 	catch {
 		throw new Error(`Collection ${name} has not been set`)
 	}
-	return itemType.toObject(itemType.decodeDelimited(contents)).value
+	const message = itemType.decodeDelimited(contents)
+	return itemType.toObject(message, {defaults: true}).value
 }
 
 export async function set(name: string, value: Uint8Array): Promise<void> {

@@ -6,5 +6,5 @@ export interface Type<T extends object> extends protobuf.Type {
 	encode(message: protobuf.Message<T>): protobuf.Writer
 	encodeDelimited(message: protobuf.Message<T>): protobuf.Writer
 	fromObject(value: T): protobuf.Message<T>
-	toObject(message: protobuf.Message<T>): T
+	toObject(message: protobuf.Message<T>, options?: protobuf.IConversionOptions): T
 }
