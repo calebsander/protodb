@@ -1,38 +1,41 @@
 import * as path from 'path'
 import {DATA_DIR} from '../constants'
 import {getFile, setFile} from '../cache'
-import {CollectionType, Collections, dbType} from '../sb-types/db'
+import {CollectionType, Collections, dbType} from '../pb/db'
+import {toArrayBuffer} from '../util'
 
 const DB_FILE = path.join(DATA_DIR, 'db')
 
-let cachedCollections: Collections | undefined
-export async function getCollections(): Promise<Collections> {
-	if (cachedCollections) return cachedCollections
-
-	let collections: Collections
+export const getCollections = (async (): Promise<Collections> => {
 	try {
-		({collections} = dbType.consumeValue(await getFile(DB_FILE), 0).value)
+		const dbFile = await getFile(DB_FILE)
+		return dbType.toObject(dbType.decode(new Uint8Array(dbFile))).collections
 	}
 	catch (e) {
-		collections = new Map
+		return {}
 	}
-	// Collections may have been updated in the meantime
-	if (!cachedCollections) cachedCollections = collections
-	return cachedCollections
+})()
+async function saveCollections(): Promise<void> {
+	const collections = await getCollections
+	await setFile(DB_FILE, toArrayBuffer(
+		dbType.encode(dbType.fromObject({collections})).finish()
+	))
 }
-const saveCollections = (): Promise<void> =>
-	setFile(DB_FILE, dbType.valueBuffer({collections: cachedCollections!}))
-export async function addCollection(name: string, collection: CollectionType): Promise<void> {
-	if (cachedCollections!.has(name)) {
+export async function addCollection(
+	name: string, collection: CollectionType
+): Promise<void> {
+	const collections = await getCollections
+	if (name in collections) {
 		throw new Error(`Collection ${name} already exists`)
 	}
-	cachedCollections!.set(name, collection)
-	return saveCollections()
+	collections[name] = collection
+	await saveCollections()
 }
 export async function dropCollection(name: string): Promise<void> {
-	if (!cachedCollections!.has(name)) {
+	const collections = await getCollections
+	if (!(name in collections)) {
 		throw new Error(`Collection ${name} does not exist`)
 	}
-	cachedCollections!.delete(name)
-	return saveCollections()
+	delete collections[name]
+	await saveCollections()
 }

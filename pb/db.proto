@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message EmptyType {}
+
+message CollectionType {
+	oneof type {
+		EmptyType item = 1;
+		EmptyType hash = 2;
+		EmptyType list = 3;
+	}
+}
+
+message DB {
+	map<string, CollectionType> collections = 1;
+}

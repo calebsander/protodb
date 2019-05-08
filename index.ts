@@ -2,7 +2,6 @@ import * as fs from 'fs'
 import * as net from 'net'
 import {promisify} from 'util'
 import {shutdown} from './cache'
-import {getCollections} from './collections'
 import {runCommand} from './command-processor'
 import {DATA_DIR, PORT} from './constants'
 import {concat} from './util'
@@ -12,7 +11,6 @@ async function initDB(): Promise<void> {
 		await promisify(fs.mkdir)(DATA_DIR)
 	}
 	catch {} // not a problem if it already exists
-	await getCollections()
 }
 
 async function cleanup(): Promise<void> {

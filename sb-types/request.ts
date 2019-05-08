@@ -1,7 +1,8 @@
 import * as sb from 'structure-bytes'
-import {ITER_BYTE_LENGTH} from '../collections/hash'
 import {literalType} from './common'
 import {BucketItem, bucketItemType} from './hash'
+
+export const ITER_BYTE_LENGTH = 16
 
 interface ListCommand {
 	type: 'list'

@@ -20,9 +20,9 @@ const filename = (name: string) =>
 	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}`)
 
 async function checkIsList(name: string): Promise<void> {
-	const collections = await getCollections()
-	const collection = collections.get(name)
-	if (!(collection && collection.type === COLLECTION_TYPE)) {
+	const collections = await getCollections
+	const collection = collections[name]
+	if (!(collection && COLLECTION_TYPE in collection)) {
 		throw new Error(`Collection ${name} is not a list`)
 	}
 }
@@ -114,7 +114,7 @@ function getParent(path: PathItem[]) {
 }
 
 export async function create(name: string): Promise<void> {
-	await addCollection(name, {type: COLLECTION_TYPE})
+	await addCollection(name, {[COLLECTION_TYPE]: {}})
 	const file = filename(name)
 	await createFile(file)
 	await setPageCount(file, 2)

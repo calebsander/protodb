@@ -81,6 +81,7 @@ export async function getPageCount(file: string): Promise<number> {
 	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
 	return getPageNo(size)
 }
+// TODO: could getFile() and setFile() use Uint8Array instead for protobufjs?
 export async function getFile(file: string): Promise<ArrayBuffer> {
 	const pages = await getPageCount(file)
 	const result = new Uint8Array(pages << LOG_PAGE_SIZE)

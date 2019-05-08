@@ -9,9 +9,16 @@ const errorToString = ({name, message}: Error) =>
 
 async function runList(): Promise<types.ListResponse> {
 	try {
-		const dbCollections = await getCollections()
+		const dbCollections = await getCollections
 		const collections: types.Collection[] = []
-		for (const [name, {type}] of dbCollections) collections.push({name, type})
+		for (const name in dbCollections) {
+			const collectionType = dbCollections[name]!
+			let type: types.CollectionType =
+				'item' in collectionType ? 'item' :
+				'hash' in collectionType ? 'hash' :
+				'list'
+			collections.push({name, type})
+		}
 		return {collections}
 	}
 	catch (e) {

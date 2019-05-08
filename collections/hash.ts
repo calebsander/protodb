@@ -22,13 +22,13 @@ import {
 	Header,
 	headerType
 } from '../sb-types/hash'
+import {ITER_BYTE_LENGTH} from '../sb-types/request'
 import {toArrayBuffer} from '../util'
 
 const COLLECTION_TYPE = 'hash'
 const HEADER_PAGE = 0
 const DIRECTORY_START_PAGE = 1
 const INITIAL_DEPTH = 0
-export const ITER_BYTE_LENGTH = 16
 
 const randomBytesPromise = promisify(randomBytes)
 
@@ -52,9 +52,9 @@ const depthHash = (hash: number, depth: number): number =>
 	hash & ((1 << depth) - 1)
 
 async function checkIsHash(name: string): Promise<void> {
-	const collections = await getCollections()
-	const collection = collections.get(name)
-	if (!(collection && collection.type === COLLECTION_TYPE)) {
+	const collections = await getCollections
+	const collection = collections[name]
+	if (!(collection && COLLECTION_TYPE in collection)) {
 		throw new Error(`Collection ${name} is not a hash`)
 	}
 }
@@ -181,7 +181,7 @@ function iterClose(key: string, name: string): void {
 }
 
 export async function create(name: string): Promise<void> {
-	await addCollection(name, {type: COLLECTION_TYPE})
+	await addCollection(name, {[COLLECTION_TYPE]: {}})
 	const initDirectory = async () => {
 		const directoryFile = directoryFilename(name)
 		await createFile(directoryFile)

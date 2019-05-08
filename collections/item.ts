@@ -10,15 +10,15 @@ const filename = (name: string) =>
 	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}`)
 
 async function checkIsItem(name: string): Promise<void> {
-	const collections = await getCollections()
-	const collection = collections.get(name)
-	if (!(collection && collection.type === COLLECTION_TYPE)) {
+	const collections = await getCollections
+	const collection = collections[name]
+	if (!(collection && COLLECTION_TYPE in collection)) {
 		throw new Error(`Collection ${name} is not an item`)
 	}
 }
 
 export function create(name: string): Promise<void> {
-	return addCollection(name, {type: COLLECTION_TYPE})
+	return addCollection(name, {[COLLECTION_TYPE]: {}})
 }
 
 export async function drop(name: string): Promise<void> {
