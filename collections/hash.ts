@@ -3,14 +3,14 @@ import * as path from 'path'
 import {promisify} from 'util'
 import {addCollection, dropCollection, getCollections} from '.'
 import {
+	copyWithinFile,
 	createFile,
 	FilePage,
+	getFile,
 	getPageCount,
-	getPageNo,
-	getPageOffset,
-	PAGE_SIZE,
+	removeFile,
 	setPageCount,
-	removeFile
+	setFileSegment
 } from '../cache'
 import {DATA_DIR} from '../constants'
 import {
@@ -19,15 +19,14 @@ import {
 	BUCKET_INDEX_BYTES,
 	bucketIndexType,
 	bucketType,
+	HEADER_BYTES,
 	Header,
 	headerType
-} from '../sb-types/hash'
+} from '../pb/hash'
 import {ITER_BYTE_LENGTH} from '../sb-types/request'
 import {toArrayBuffer} from '../util'
 
 const COLLECTION_TYPE = 'hash'
-const HEADER_PAGE = 0
-const DIRECTORY_START_PAGE = 1
 const INITIAL_DEPTH = 0
 
 const randomBytesPromise = promisify(randomBytes)
@@ -37,13 +36,12 @@ const filename = (name: string, fileType: string) =>
 const directoryFilename = (name: string) => filename(name, 'directory')
 const bucketsFilename = (name: string) => filename(name, 'buckets')
 
-const equal = (buffer1: ArrayBuffer, buffer2: ArrayBuffer): boolean =>
-	!Buffer.from(buffer1).compare(new Uint8Array(buffer2))
+const equal = (buffer1: Uint8Array, buffer2: Uint8Array): boolean =>
+	!Buffer.from(buffer1).compare(buffer2)
 
-function fullHash(key: ArrayBuffer): number {
-	const hash = new Int32Array(toArrayBuffer(
-		createHash('md5').update(new Uint8Array(key)).digest()
-	))
+function fullHash(key: Uint8Array): number {
+	const hash =
+		new Int32Array(toArrayBuffer(createHash('md5').update(key).digest()))
 	let hash32 = 0
 	for (const word of hash) hash32 ^= word
 	return hash32
@@ -59,88 +57,63 @@ async function checkIsHash(name: string): Promise<void> {
 	}
 }
 
-const getHeader = (name: string): Promise<Header> =>
-	new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
-		headerType.consumeValue(page, 0).value
-	)
-
-const setHeader = (name: string, header: Header): Promise<void> =>
-	new FilePage(directoryFilename(name), HEADER_PAGE).use(async page =>
-		new Uint8Array(page).set(new Uint8Array(headerType.valueBuffer(header)))
-	)
-
-async function addBucket(name: string, page: number, bucket: Bucket): Promise<void> {
-	const bucketsFile = bucketsFilename(name)
-	await setPageCount(bucketsFile, page + 1)
-	return new FilePage(bucketsFile, page).use(async page =>
-		new Uint8Array(page).set(new Uint8Array(bucketType.valueBuffer(bucket)))
-	)
+async function getHeader(name: string): Promise<Header> {
+	const contents = await getFile(directoryFilename(name), 0, HEADER_BYTES)
+	return headerType.toObject(headerType.decode(contents), {longs: Number})
 }
 
-function locateBucketIndex(bucket: number): {page: number, offset: number} {
-	const bucketIndexByte = bucket * BUCKET_INDEX_BYTES
-	return {
-		page: DIRECTORY_START_PAGE + getPageNo(bucketIndexByte),
-		offset: getPageOffset(bucketIndexByte)
-	}
-}
-function getBucketPage(name: string, bucket: number): Promise<number> {
-	const {page, offset} = locateBucketIndex(bucket)
-	return new FilePage(directoryFilename(name), page).use(async page =>
-		bucketIndexType.consumeValue(page, offset).value
-	)
-}
-function setBucketPage(name: string, bucket: number, bucketPage: number): Promise<void> {
-	const {page, offset} = locateBucketIndex(bucket)
-	return new FilePage(directoryFilename(name), page).use(async page =>
-		new Uint8Array(page, offset)
-			.set(new Uint8Array(bucketIndexType.valueBuffer(bucketPage)))
-	)
+function setHeader(name: string, header: Header): Promise<void> {
+	const contents = headerType.encode(headerType.fromObject(header)).finish()
+	return setFileSegment(directoryFilename(name), contents, 0, HEADER_BYTES)
 }
 
 const getBucket = (name: string, page: number): Promise<Bucket> =>
 	new FilePage(bucketsFilename(name), page).use(async page =>
-		bucketType.consumeValue(page, 0).value
+		bucketType.toObject(
+			bucketType.decodeDelimited(new Uint8Array(page)),
+			{defaults: true}
+		)
 	)
 
 const setBucket = (name: string, page: number, bucket: Bucket): Promise<void> =>
 	new FilePage(bucketsFilename(name), page).use(async page =>
-		new Uint8Array(page).set(new Uint8Array(bucketType.valueBuffer(bucket)))
+		new Uint8Array(page).set(
+			bucketType.encodeDelimited(bucketType.fromObject(bucket)).finish()
+		)
+	)
+
+async function addBucket(name: string, page: number, bucket: Bucket): Promise<void> {
+	await setPageCount(bucketsFilename(name), page + 1)
+	await setBucket(name, page, bucket)
+}
+
+const locateBucketIndex = (bucket: number): number =>
+	HEADER_BYTES + bucket * BUCKET_INDEX_BYTES
+async function getBucketPage(name: string, bucket: number): Promise<number> {
+	const offset = locateBucketIndex(bucket)
+	const contents =
+		await getFile(directoryFilename(name), offset, BUCKET_INDEX_BYTES)
+	return bucketIndexType.toObject(bucketIndexType.decode(contents)).page
+}
+const setBucketPage = (name: string, bucket: number, page: number): Promise<void> =>
+	setFileSegment(
+		directoryFilename(name),
+		bucketIndexType.encode(bucketIndexType.fromObject({page})).finish(),
+		locateBucketIndex(bucket),
+		BUCKET_INDEX_BYTES
 	)
 
 async function extendDirectory(name: string, header: Header): Promise<void> {
 	const {depth} = header
-	const doubleDirectory = async () => {
-		const directoryFile = directoryFilename(name)
-		const bucketIndexBytes = BUCKET_INDEX_BYTES << depth
-		// Since bucketIndexBytes and PAGE_SIZE are powers of 2,
-		// we are either copying within the first page, or duplicating whole pages
-		if (bucketIndexBytes < PAGE_SIZE) {
-			await new FilePage(directoryFile, DIRECTORY_START_PAGE)
-				.use(async page =>
-					new Uint8Array(page, bucketIndexBytes)
-						.set(new Uint8Array(page, 0, bucketIndexBytes))
-				)
-		}
-		else {
-			const copyPages = getPageNo(bucketIndexBytes)
-			await setPageCount(directoryFile, DIRECTORY_START_PAGE + (copyPages << 1))
-			const copyPromises: Promise<void>[] = []
-			for (let pageNo = 0; pageNo < copyPages; pageNo++) {
-				const sourcePage = DIRECTORY_START_PAGE + pageNo
-				copyPromises.push(
-					new FilePage(directoryFile, sourcePage).use(async page =>
-						new FilePage(directoryFile, sourcePage + copyPages).use(async newPage =>
-							new Uint8Array(newPage).set(new Uint8Array(page))
-						)
-					)
-				)
-			}
-			await Promise.all(copyPromises)
-		}
-	}
-	header.depth++
-	await Promise.all([doubleDirectory(), setHeader(name, header)])
+	const indexBytes = BUCKET_INDEX_BYTES << depth
+	const doubleDirectory = copyWithinFile(
+		directoryFilename(name),
+		HEADER_BYTES,
+		indexBytes,
+		HEADER_BYTES + indexBytes
+	)
+	header.depth = depth + 1
+	await Promise.all([doubleDirectory, setHeader(name, header)])
 }
 
 interface HashIterator {
@@ -185,12 +158,10 @@ export async function create(name: string): Promise<void> {
 	const initDirectory = async () => {
 		const directoryFile = directoryFilename(name)
 		await createFile(directoryFile)
-		await setPageCount(directoryFile, 2)
+		await setPageCount(directoryFile, 1)
 		await Promise.all([
 			setHeader(name, {depth: INITIAL_DEPTH, size: 0}),
-			new FilePage(directoryFile, DIRECTORY_START_PAGE).use(async page =>
-				new Uint8Array(page).set(new Uint8Array(bucketIndexType.valueBuffer(0)))
-			)
+			setBucketPage(name, 0, 0)
 		])
 	}
 	const initBucket = async () => {
@@ -210,7 +181,7 @@ export async function drop(name: string): Promise<void> {
 	])
 }
 
-export async function get(name: string, key: ArrayBuffer): Promise<ArrayBuffer | null> {
+export async function get(name: string, key: Uint8Array): Promise<Uint8Array | null> {
 	await checkIsHash(name)
 	const {depth} = await getHeader(name)
 	const bucketIndex = depthHash(fullHash(key), depth)
@@ -222,7 +193,7 @@ export async function get(name: string, key: ArrayBuffer): Promise<ArrayBuffer |
 }
 
 export async function set(
-	name: string, key: ArrayBuffer, value: ArrayBuffer
+	name: string, key: Uint8Array, value: Uint8Array
 ): Promise<void> {
 	await checkIsHash(name)
 	checkNoIterators(name)
@@ -267,37 +238,35 @@ export async function set(
 		      items1: BucketItem[] = []
 		for (const item of items) {
 			const hash = fullHash(item.key)
-			const newItems = depthHash(hash, oldDepth) == depthHash(hash, newDepth)
+			const newItems = depthHash(hash, oldDepth) === depthHash(hash, newDepth)
 				? items0
 				: items1
 			newItems.push(item)
 		}
-		const makeNewBucket = async () => {
-			// Add a page for the bucket to the end of the bucket file
-			const newBucketPage = await getPageCount(bucketsFilename(name))
-			const updatePromises =
-				[addBucket(name, newBucketPage, {depth: newDepth, items: items1})]
-			// Update the 2 ** (header.depth - newDepth) bucket indices
-			// that now point to the new bucket
-			const bucketRepeatInterval = 1 << newDepth
-			const maxBucketIndex = 1 << header.depth
-			for (
-				let bucket1 = depthHash(bucketIndex, oldDepth) | 1 << oldDepth;
-				bucket1 < maxBucketIndex;
-				bucket1 += bucketRepeatInterval
-			) {
-				updatePromises.push(setBucketPage(name, bucket1, newBucketPage))
-			}
-			await Promise.all(updatePromises)
+		// Add a page for the bucket to the end of the bucket file
+		const newBucketPage = await getPageCount(bucketsFilename(name))
+		const updatePromises = [(async () => {
+			await addBucket(name, newBucketPage, {depth: newDepth, items: items1})
+			// Need to wait to overwrite the old bucket until the new bucket is written
+			// because the items are slices of the old page
+			await setBucket(name, bucketPage, {depth: newDepth, items: items0})
+		})()]
+		// Update the 2 ** (header.depth - newDepth) bucket indices
+		// that now point to the new bucket
+		const bucketRepeatInterval = 1 << newDepth
+		const maxBucketIndex = 1 << header.depth
+		for (
+			let bucket1 = depthHash(hash, oldDepth) | 1 << oldDepth;
+			bucket1 < maxBucketIndex;
+			bucket1 += bucketRepeatInterval
+		) {
+			updatePromises.push(setBucketPage(name, bucket1, newBucketPage))
 		}
-		await Promise.all([
-			setBucket(name, bucketPage, {depth: newDepth, items: items0}),
-			makeNewBucket()
-		])
+		await Promise.all(updatePromises)
 	}
 }
 
-export async function remove(name: string, key: ArrayBuffer): Promise<void> {
+export async function remove(name: string, key: Uint8Array): Promise<void> {
 	await checkIsHash(name)
 	checkNoIterators(name)
 	const header = await getHeader(name)
@@ -325,6 +294,7 @@ export async function size(name: string): Promise<number> {
 }
 
 export async function iter(name: string): Promise<number[]> {
+	await checkIsHash(name)
 	iteratorCounts.set(name, (iteratorCounts.get(name) || 0) + 1)
 	const iter = await randomBytesPromise(ITER_BYTE_LENGTH)
 	const iterKey = iter.toString('hex')

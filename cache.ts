@@ -2,8 +2,6 @@ import * as fs from 'fs'
 import {promisify} from 'util'
 import {LOG_PAGE_SIZE, PAGE_SIZE, mmap} from './mmap-wrapper'
 
-export {PAGE_SIZE}
-
 const close = promisify(fs.close),
       open = promisify(fs.open),
       stat = promisify(fs.fstat),
@@ -48,6 +46,7 @@ async function loadPage(file: string, page: number): Promise<ArrayBuffer> {
 
 export const getPageNo = (byte: number) => byte >> LOG_PAGE_SIZE
 export const getPageOffset = (byte: number) => byte & (PAGE_SIZE - 1)
+const pagesToFit = (bytes: number) => getPageNo(bytes + PAGE_SIZE - 1)
 
 type PageConsumer<T> = (page: ArrayBuffer) => Promise<T>
 
@@ -81,28 +80,81 @@ export async function getPageCount(file: string): Promise<number> {
 	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
 	return getPageNo(size)
 }
-export async function getFile(file: string): Promise<Uint8Array> {
-	const pages = await getPageCount(file)
-	const result = new Uint8Array(pages << LOG_PAGE_SIZE)
+export async function getFile(file: string, start = 0, length?: number): Promise<Uint8Array> {
+	if (length === undefined) {
+		const pageCount = await getPageCount(file)
+		length = (pageCount << LOG_PAGE_SIZE) - start
+	}
+	const result = new Uint8Array(length)
 	const pagePromises: Promise<void>[] = []
-	for (let offset = 0, pageNo = 0; pageNo < pages; offset += PAGE_SIZE, pageNo++) {
-		pagePromises.push(new FilePage(file, pageNo).use(async page =>
-			result.set(new Uint8Array(page), offset)
+	for (let offset = 0, nextOffset: number; offset < length; offset = nextOffset) {
+		const fileOffset = start + offset
+		const pageOffset = getPageOffset(fileOffset)
+		pagePromises.push(new FilePage(file, getPageNo(fileOffset)).use(async page =>
+			result.set(
+				new Uint8Array(page, pageOffset).subarray(0, length! - offset),
+				offset
+			)
 		))
+		nextOffset = offset + PAGE_SIZE - pageOffset
 	}
 	await Promise.all(pagePromises)
 	return result
 }
-export async function setFile(file: string, contents: Uint8Array): Promise<void> {
-	const {fd} = await getFileCache(file, true)
-	const newPages = getPageNo(contents.byteLength + PAGE_SIZE - 1)
-	await truncate(fd, newPages << LOG_PAGE_SIZE)
+export async function setFileSegment(
+	file: string, contents: Uint8Array, start: number, length: number
+): Promise<void> {
 	const pagePromises: Promise<void>[] = []
-	const {byteLength} = contents
-	for (let offset = 0, pageNo = 0; offset < byteLength; offset += PAGE_SIZE, pageNo++) {
-		pagePromises.push(new FilePage(file, pageNo).use(async page =>
-			new Uint8Array(page).set(contents.subarray(offset, offset + PAGE_SIZE))
+	for (let offset = 0, nextOffset: number; offset < length; offset = nextOffset) {
+		const fileOffset = start + offset
+		const pageOffset = getPageOffset(fileOffset)
+		nextOffset = offset + PAGE_SIZE - pageOffset
+		pagePromises.push(new FilePage(file, getPageNo(fileOffset)).use(async page =>
+			new Uint8Array(page, pageOffset).set(contents.subarray(offset, nextOffset))
 		))
+	}
+	await Promise.all(pagePromises)
+}
+export async function setFile(file: string, contents: Uint8Array): Promise<void> {
+	await getFileCache(file, true)
+	await setPageCount(file, pagesToFit(contents.length))
+	await setFileSegment(file, contents, 0, contents.length)
+}
+export async function copyWithinFile(
+	file: string, source: number, length: number, target: number
+): Promise<void> {
+	const currentLength = await getPageCount(file) << LOG_PAGE_SIZE
+	const newLength = target + length
+	if (newLength > currentLength) {
+		await setPageCount(file, pagesToFit(newLength))
+	}
+	const pagePromises: Promise<void>[] = []
+	for (let offset = 0, nextOffset: number; offset < length; offset = nextOffset) {
+		const targetOffset = target + offset
+		const pageOffset = getPageOffset(targetOffset)
+		const copyLength = Math.min(PAGE_SIZE - pageOffset, length - offset)
+		const writeBuffers = (buffers: Uint8Array[]) =>
+			new FilePage(file, getPageNo(targetOffset)).use(async page => {
+				const pageArray = new Uint8Array(page)
+				let offset = pageOffset
+				for (const buffer of buffers) {
+					pageArray.set(buffer, offset)
+					offset += buffer.length
+				}
+			})
+		const sourceOffset = source + offset
+		const sourcePage = getPageNo(sourceOffset)
+		pagePromises.push(new FilePage(file, sourcePage).use(async page => {
+			const pageOffset = getPageOffset(sourceOffset)
+			const buffer = new Uint8Array(page, pageOffset).subarray(0, copyLength)
+			const remainingLength = copyLength - buffer.length
+			return remainingLength
+				? new FilePage(file, sourcePage + 1).use(async page =>
+						writeBuffers([buffer, new Uint8Array(page, 0, remainingLength)])
+					)
+				: writeBuffers([buffer])
+		}))
+		nextOffset = offset + copyLength
 	}
 	await Promise.all(pagePromises)
 }

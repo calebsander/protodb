@@ -1,6 +1,5 @@
 import * as sb from 'structure-bytes'
 import {literalType} from './common'
-import {BucketItem, bucketItemType} from './hash'
 
 export const ITER_BYTE_LENGTH = 16
 
@@ -78,9 +77,11 @@ const hashGetCommandType = new sb.StructType<HashGetCommand>({
 	key: new sb.OctetsType
 })
 
-export interface HashSetCommand extends BucketItem {
+export interface HashSetCommand {
 	type: 'hash_set'
 	name: string
+	key: ArrayBuffer
+	value: ArrayBuffer
 }
 const hashSetCommandType = new sb.StructType<HashSetCommand>({
 	type: literalType('hash_set'),
@@ -289,11 +290,15 @@ export const optionalBytesResponseType = new sb.ChoiceType<OptionalBytesResponse
 	})
 ])
 
-export type OptionalPairResponse = ErrorResponse<{item: BucketItem | null}>
+export type OptionalPairResponse =
+	ErrorResponse<{item: {key: ArrayBuffer, value: ArrayBuffer} | null}>
 export const optionalPairResponseType = new sb.ChoiceType<OptionalPairResponse>([
 	errorType,
 	new sb.StructType<OptionalPairResponse>({
-		item: new sb.OptionalType(bucketItemType)
+		item: new sb.OptionalType(new sb.StructType({
+			key: new sb.OctetsType,
+			value: new sb.OctetsType
+		}))
 	})
 ])
 

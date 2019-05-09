@@ -5,8 +5,11 @@ import * as list from './collections/list'
 import * as types from './sb-types/request'
 import {toArrayBuffer} from './util'
 
-const errorToString = ({name, message}: Error) =>
-	({error: `${name}: ${message}`})
+function errorToString(err: Error) {
+	console.error(err)
+	const {name, message} = err
+	return {error: `${name}: ${message}`}
+}
 
 async function runList(): Promise<types.ListResponse> {
 	try {
@@ -58,17 +61,17 @@ const runHashDrop =
 			.catch(errorToString)
 const runHashGet =
 	({name, key}: types.HashGetCommand): Promise<types.OptionalBytesResponse> =>
-		hash.get(name, key)
-			.then(data => ({data}))
+		hash.get(name, new Uint8Array(key))
+			.then(data => ({data: data && toArrayBuffer(data)}))
 			.catch(errorToString)
 const runHashSet =
 	({name, key, value}: types.HashSetCommand): Promise<types.VoidResponse> =>
-		hash.set(name, key, value)
+		hash.set(name, new Uint8Array(key), new Uint8Array(value))
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashDelete =
 	({name, key}: types.HashDeleteCommand): Promise<types.VoidResponse> =>
-		hash.remove(name, key)
+		hash.remove(name, new Uint8Array(key))
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashSize =
@@ -84,7 +87,10 @@ const runHashIter =
 const runHashIterNext =
 	({iter}: types.HashIterNextCommand): Promise<types.OptionalPairResponse> =>
 		hash.iterNext(iter)
-			.then(item => ({item}))
+			.then(item => ({
+				item: item &&
+					{key: toArrayBuffer(item.key), value: toArrayBuffer(item.value)}
+			}))
 			.catch(errorToString)
 function runHashIterBreak({iter}: types.HashIterBreakCommand): types.VoidResponse {
 	try {
