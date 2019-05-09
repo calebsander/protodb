@@ -114,16 +114,16 @@ const runListDrop =
 const runListGet =
 	({name, index}: types.ListGetCommand): Promise<types.BytesResponse> =>
 		list.get(name, index)
-			.then(data => ({data}))
+			.then(data => ({data: data && toArrayBuffer(data)}))
 			.catch(errorToString)
 const runListSet =
 	({name, index, value}: types.ListSetCommand): Promise<types.VoidResponse> =>
-		list.set(name, index, value)
+		list.set(name, index, new Uint8Array(value))
 			.then(_ => ({}))
 			.catch(errorToString)
 const runListInsert =
 	({name, index, value}: types.ListInsertCommand): Promise<types.VoidResponse> =>
-		list.insert(name, index, value)
+		list.insert(name, index, new Uint8Array(value))
 			.then(_ => ({}))
 			.catch(errorToString)
 

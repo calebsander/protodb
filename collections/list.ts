@@ -7,10 +7,9 @@ import {
 	freePageType,
 	Header,
 	headerType,
-	InnerNode,
-	LeafNode,
+	Node,
 	nodeType
-} from '../sb-types/list'
+} from '../pb/list'
 
 const COLLECTION_TYPE = 'list'
 const HEADER_PAGE = 0
@@ -30,22 +29,28 @@ async function checkIsList(name: string): Promise<void> {
 interface PathItem {
 	page: number
 	index: number
-	node: InnerNode | LeafNode
+	node: Node
 }
 
 const getHeader = (name: string): Promise<Header> =>
 	new FilePage(filename(name), HEADER_PAGE).use(async page =>
-		headerType.consumeValue(page, 0).value
+		headerType.toObject(
+			headerType.decodeDelimited(new Uint8Array(page)),
+			{longs: Number}
+		)
 	)
 const setHeader = (name: string, header: Header): Promise<void> =>
 	new FilePage(filename(name), HEADER_PAGE).use(async page =>
-		new Uint8Array(page).set(new Uint8Array(headerType.valueBuffer(header)))
-	)
-const setNode =
-	(name: string, page: number, node: InnerNode | LeafNode): Promise<void> =>
-		new FilePage(filename(name), page).use(async page =>
-			new Uint8Array(page).set(new Uint8Array(nodeType.valueBuffer(node)))
+		new Uint8Array(page).set(
+			headerType.encodeDelimited(headerType.fromObject(header)).finish()
 		)
+	)
+const setNode = (name: string, page: number, node: Node): Promise<void> =>
+	new FilePage(filename(name), page).use(async page =>
+		new Uint8Array(page).set(
+			nodeType.encodeDelimited(nodeType.fromObject(node)).finish()
+		)
+	)
 
 async function lookup(name: string, index: number | null, insert = false): Promise<PathItem[]> {
 	const {child: {size, page}} = await getHeader(name)
@@ -59,17 +64,21 @@ async function lookup(name: string, index: number | null, insert = false): Promi
 			throw new Error(`Index ${index} is out of bounds in list of size ${size}`)
 		}
 	}
+
 	const file = filename(name)
 	const path: PathItem[] = []
 	let lookupPage = page
 	while (true) {
 		const node = await new FilePage(file, lookupPage).use(async page =>
-			nodeType.consumeValue(page, 0).value
+			nodeType.toObject(
+				nodeType.decodeDelimited(new Uint8Array(page)),
+				{defaults: true, longs: Number}
+			)
 		)
 		path.push({page: lookupPage, index, node})
-		if (node.type === 'leaf') return path
+		if ('leaf' in node) return path
 
-		for (const {size, page} of node.children) {
+		for (const {size, page} of node.inner.children) {
 			if (index < size || insert && index === size) {
 				lookupPage = page
 				break
@@ -82,7 +91,7 @@ async function lookup(name: string, index: number | null, insert = false): Promi
 
 async function getFreePage(name: string, header: Header): Promise<number> {
 	const file = filename(name)
-	const {freePage} = header
+	const freePage = header.freePage.next
 	if (freePage === FREE_LIST_END) {
 		const pages = await getPageCount(file)
 		await setPageCount(file, pages + 1)
@@ -90,7 +99,7 @@ async function getFreePage(name: string, header: Header): Promise<number> {
 	}
 	else {
 		header.freePage = await new FilePage(file, freePage).use(async page =>
-			freePageType.consumeValue(page, 0).value
+			freePageType.toObject(freePageType.decodeDelimited(new Uint8Array(page)))
 		)
 		return freePage
 	}
@@ -98,18 +107,18 @@ async function getFreePage(name: string, header: Header): Promise<number> {
 
 const split = <T>(arr: T[]): T[] => arr.splice(arr.length >> 1)
 
-const nodeSize = (node: InnerNode | LeafNode) =>
-	node.type === 'inner'
-		? node.children.reduce((totalSize, {size}) => totalSize + size, 0)
-		: node.values.length
+const nodeSize = (node: Node) =>
+	'inner' in node
+		? node.inner.children.reduce((totalSize, {size}) => totalSize + size, 0)
+		: node.leaf.values.length
 
 function getParent(path: PathItem[]) {
 	const [parent]: (PathItem | undefined)[] = path.slice(-1)
 	if (!parent) return undefined
 
 	const {node: parentNode, index} = parent
-	if (parentNode.type !== 'inner') throw new Error('Parent is not an inner node?')
-	const {children} = parentNode
+	if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
+	const {children} = parentNode.inner
 	return {children, index}
 }
 
@@ -121,9 +130,9 @@ export async function create(name: string): Promise<void> {
 	await Promise.all([
 		setHeader(name, {
 			child: {size: 0, page: INITIAL_ROOT_PAGE},
-			freePage: FREE_LIST_END
+			freePage: {next: FREE_LIST_END}
 		}),
-		setNode(name, INITIAL_ROOT_PAGE, {type: 'leaf', values: []})
+		setNode(name, INITIAL_ROOT_PAGE, {leaf: {values: []}})
 	])
 }
 
@@ -132,33 +141,33 @@ export async function drop(name: string): Promise<void> {
 	await Promise.all([dropCollection(name), removeFile(filename(name))])
 }
 
-export async function get(name: string, listIndex: number): Promise<ArrayBuffer> {
+export async function get(name: string, listIndex: number): Promise<Uint8Array> {
 	await checkIsList(name)
 	const path = await lookup(name, listIndex)
 	const [{index, node}] = path.slice(-1)
-	if (node.type !== 'leaf') throw new Error('Path does not end in a leaf?')
-	return node.values[index]
+	if ('inner' in node) throw new Error('Path does not end in a leaf?')
+	return node.leaf.values[index]
 }
 
 export async function set(
-	name: string, listIndex: number, value: ArrayBuffer
+	name: string, listIndex: number, value: Uint8Array
 ): Promise<void> {
 	await checkIsList(name)
 	const path = await lookup(name, listIndex)
 	const [{page, index, node}] = path.slice(-1)
-	if (node.type !== 'leaf') throw new Error('Path does not end in a leaf?')
-	node.values[index] = value
+	if ('inner' in node) throw new Error('Path does not end in a leaf?')
+	node.leaf.values[index] = value
 	await setNode(name, page, node)
 }
 
 export async function insert(
-	name: string, listIndex: number | null, value: ArrayBuffer
+	name: string, listIndex: number | null, value: Uint8Array
 ): Promise<void> {
 	await checkIsList(name)
 	const path = await lookup(name, listIndex, true)
 	const [{index, node}] = path.slice(-1)
-	if (node.type !== 'leaf') throw new Error('Path does not end in a leaf?')
-	node.values.splice(index, 0, value)
+	if ('inner' in node) throw new Error('Path does not end in a leaf?')
+	node.leaf.values.splice(index, 0, value)
 	const header = await getHeader(name)
 	while (path.length) {
 		const {page, node} = path.pop()!
@@ -176,31 +185,33 @@ export async function insert(
 				throw e // unexpected error; rethrow it
 			}
 
-			const newNode: InnerNode | LeafNode = node.type === 'inner'
-				? {type: 'inner', children: split(node.children)}
-				: {type: 'leaf', values: split(node.values)}
-			const makeNewNode = async () => {
-				const newPage = await getFreePage(name, header)
-				const oldChild = {size: nodeSize(node), page},
-				      newChild = {size: nodeSize(newNode), page: newPage}
-				const promises = [setNode(name, newPage, newNode)]
-				if (parent) {
-					const {children, index} = parent
-					children.splice(index, 1, oldChild, newChild)
-				}
-				else { // splitting the root node
-					const makeNewRoot = async () => {
-						const rootPage = await getFreePage(name, header)
-						header.child.page = rootPage
-						await setNode(
-							name, rootPage, {type: 'inner', children: [oldChild, newChild]}
-						)
-					}
-					promises.push(makeNewRoot())
-				}
-				await Promise.all(promises)
+			const newNode: Node = 'inner' in node
+				? {inner: {children: split(node.inner.children)}}
+				: {leaf: {values: split(node.leaf.values)}}
+			const newPage = await getFreePage(name, header)
+			const oldChild = {size: nodeSize(node), page},
+						newChild = {size: nodeSize(newNode), page: newPage}
+			const promises = [(async () => {
+				await setNode(name, newPage, newNode)
+				// Need to wait to overwrite the old node until the new node is written
+				// because leaf values are slices of the old page
+				await setNode(name, page, node)
+			})()]
+			if (parent) {
+				const {children, index} = parent
+				children.splice(index, 1, oldChild, newChild)
 			}
-			await Promise.all([setNode(name, page, node), makeNewNode()])
+			else { // splitting the root node
+				const makeNewRoot = async () => {
+					const rootPage = await getFreePage(name, header)
+					header.child.page = rootPage
+					await setNode(
+						name, rootPage, {inner: {children: [oldChild, newChild]}}
+					)
+				}
+				promises.push(makeNewRoot())
+			}
+			await Promise.all(promises)
 		}
 	}
 	header.child.size++

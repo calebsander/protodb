@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+message Child {
+	uint64 size = 1;
+	uint32 page = 2;
+}
+
+message FreePage {
+	uint32 next = 1;
+}
+
+message Header {
+	Child child = 1;
+	FreePage freePage = 2;
+}
+
+message InnerNode {
+	repeated Child children = 1;
+}
+message LeafNode {
+	repeated bytes values = 1;
+}
+message Node {
+	oneof type {
+		InnerNode inner = 1;
+		LeafNode leaf = 2;
+	}
+}
