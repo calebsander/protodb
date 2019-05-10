@@ -1,220 +1,221 @@
-import * as fs from 'fs'
 import * as net from 'net'
 import * as readline from 'readline'
-import * as sb from 'structure-bytes'
-import {promisify} from 'util'
+import {inspect} from 'util'
+import * as protobuf from 'protobufjs'
 import {PORT} from '../constants'
+import {Type} from '../pb/common'
 import {
 	Command,
 	commandType,
-	BytesResponse,
 	IterResponse,
 	OptionalBytesResponse,
 	OptionalPairResponse,
 	bytesResponseType,
 	iterResponseType,
-	listReponseType,
+	listResponseType,
 	optionalBytesResponseType,
 	optionalPairResponseType,
-	unsignedResponseType,
-	voidReponseType
-} from '../sb-types/request'
+	sizeResponseType,
+	voidResponseType
+} from '../pb/request'
 import {concat} from '../util'
 
-const readType = promisify(sb.readType)
-
-const toHexString = (bytes: number[]): string =>
-	bytes.map(b => (b < 16 ? '0' : '') + b.toString(16)).join('')
-function fromHexString(str: string): number[] {
-	const bytes = new Array<number>(str.length >> 1)
+const toHexString = (bytes: Uint8Array): string =>
+	[...bytes].map(b => (b < 16 ? '0' : '') + b.toString(16)).join('')
+function fromHexString(str: string): Uint8Array {
+	const bytes = new Uint8Array(str.length >> 1)
 	for (let i = 0; i < bytes.length; i++) {
 		bytes[i] = parseInt(str.substr(i << 1, 2), 16)
 	}
 	return bytes
 }
 
+async function lookupType(file: string, ...types: string[]): Promise<Type<any>[]> {
+	const protoFile = await protobuf.load(file)
+	return types.map(type => protoFile.lookupType(type) as Type<any>)
+}
+
 async function processCommands() {
 	const rl = readline.createInterface(process.stdin)
 	for await (const line of rl) {
-		const args = line.trim().split(/\s+/)
+		const trimmedLine = line.trim()
+		if (!trimmedLine) continue
+
+		const args = trimmedLine.split(/\s+/)
 		let command: Command
-		let responseType: sb.Type<any>, bytesType: sb.Type<any>
-		let keyType: sb.Type<any>, valueType: sb.Type<any>
+		let responseType: Type<any>
+		let bytesType: Type<any>, keyType: Type<any>, valueType: Type<any>
 		try {
-			const type = args[0].toLowerCase()
+			const [type] = args
 			switch (type) {
-				case 'list': {
-					command = {type}
-					responseType = listReponseType
+				case 'list':
+					command = {[type]: {}}
+					responseType = listResponseType
 					break
-				}
-				case 'item_create': {
+				case 'itemCreate': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = voidReponseType
+					command = {[type]: {name}}
+					responseType = voidResponseType
 					break
 				}
-				case 'item_drop': {
+				case 'itemDrop': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = voidReponseType
+					command = {[type]: {name}}
+					responseType = voidResponseType
 					break
 				}
-				case 'item_get': {
+				case 'itemGet': {
 					const [name, typeFile]: (string | undefined)[] = args.slice(1)
 					if (!(name && typeFile)) {
-						throw new Error(`Syntax: ${type} name type_file`)
+						throw new Error(`Syntax: ${type} name typeFile`)
 					}
-					command = {type, name}
+					[bytesType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {name}}
 					responseType = bytesResponseType
-					bytesType = await readType(fs.createReadStream(typeFile))
 					break
 				}
-				case 'item_set': {
+				case 'itemSet': {
 					const [name, typeFile, value]: (string | undefined)[] = args.slice(1)
 					if (!(name && typeFile && value)) {
-						throw new Error(`Syntax: ${type} name type_file value`)
+						throw new Error(`Syntax: ${type} name typeFile value`)
 					}
-					const valueType = await readType(fs.createReadStream(typeFile))
-					command = {type, name, value: valueType.valueBuffer(JSON.parse(value))}
-					responseType = voidReponseType
+					const [valueType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {
+						name,
+						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
+					}}
+					responseType = voidResponseType
 					break
 				}
-				case 'hash_create': {
+				case 'hashCreate': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = voidReponseType
+					command = {[type]: {name}}
+					responseType = voidResponseType
 					break
 				}
-				case 'hash_drop': {
+				case 'hashDrop': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = voidReponseType
+					command = {[type]: {name}}
+					responseType = voidResponseType
 					break
 				}
-				case 'hash_get': {
-					const [name, keyTypeFile, key, valueTypeFile]: (string | undefined)[] = args.slice(1)
-					if (!(name && keyTypeFile && key && valueTypeFile)) {
-						throw new Error(`Syntax: ${type} name key_type_file key value_type_file`)
+				case 'hashDelete': {
+					const [name, typeFile, key]: (string | undefined)[] = args.slice(1)
+					if (!(name && typeFile && key)) {
+						throw new Error(`Syntax: ${type} name typeFile key`)
 					}
-					const [keyType, valueType] = await Promise.all(
-						[keyTypeFile, valueTypeFile].map(typeFile =>
-							readType(fs.createReadStream(typeFile))
-						)
-					)
-					command = {type, name, key: keyType.valueBuffer(JSON.parse(key))}
+					const [keyType] = await lookupType(typeFile, 'KeyType')
+					command = {[type]: {
+						name,
+						key: keyType.encode(keyType.fromObject(JSON.parse(key))).finish()
+					}}
+					responseType = voidResponseType
+					break
+				}
+				case 'hashGet': {
+					const [name, typeFile, key]: (string | undefined)[] = args.slice(1)
+					if (!(name && typeFile && key)) {
+						throw new Error(`Syntax: ${type} name typeFile key`)
+					}
+					const [keyType, valueType] =
+						await lookupType(typeFile, 'KeyType', 'ValueType')
+					command = {[type]: {
+						name,
+						key: keyType.encode(keyType.fromObject(JSON.parse(key))).finish()
+					}}
 					responseType = optionalBytesResponseType
 					bytesType = valueType
 					break
 				}
-				case 'hash_set': {
-					const [name, keyTypeFile, key, valueTypeFile, value]: (string | undefined)[] = args.slice(1)
-					if (!(name && keyTypeFile && key && valueTypeFile && value)) {
-						throw new Error(`Syntax: ${type} name key_type_file key value_type_file value`)
+				case 'hashSet': {
+					const [name, typeFile, key, value]: (string | undefined)[] = args.slice(1)
+					if (!(name && typeFile && key && value)) {
+						throw new Error(`Syntax: ${type} name typeFile key value`)
 					}
-					const [keyType, valueType] = await Promise.all(
-						[keyTypeFile, valueTypeFile].map(typeFile =>
-							readType(fs.createReadStream(typeFile))
-						)
-					)
-					command = {
-						type,
+					const [keyType, valueType] =
+						await lookupType(typeFile, 'KeyType', 'ValueType')
+					command = {[type]: {
 						name,
-						key: keyType.valueBuffer(JSON.parse(key)),
-						value: valueType.valueBuffer(JSON.parse(value))
-					}
-					responseType = voidReponseType
+						key: keyType.encode(keyType.fromObject(JSON.parse(key))).finish(),
+						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
+					}}
+					responseType = voidResponseType
 					break
 				}
-				case 'hash_delete': {
-					const [name, keyTypeFile, key]: (string | undefined)[] = args.slice(1)
-					if (!(name && keyTypeFile && key)) {
-						throw new Error(`Syntax: ${type} name key_type_file key`)
-					}
-					const keyType = await readType(fs.createReadStream(keyTypeFile))
-					command = {type, name, key: keyType.valueBuffer(JSON.parse(key))}
-					responseType = voidReponseType
-					break
-				}
-				case 'hash_size': {
+				case 'hashSize': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = unsignedResponseType
+					command = {[type]: {name}}
+					responseType = sizeResponseType
 					break
 				}
-				case 'hash_iter': {
+				case 'hashIter': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
+					command = {[type]: {name}}
 					responseType = iterResponseType
 					break
 				}
-				case 'hash_iter_next': {
-					const [iter, keyTypeFile, valueTypeFile]: (string | undefined)[] = args.slice(1)
-					if (!(iter && keyTypeFile && valueTypeFile)) {
-						throw new Error(`Syntax: ${type} iter key_type_file value_type_file`)
-					}
-					command = {type, iter: fromHexString(iter)}
-					responseType = optionalPairResponseType
-					;[keyType, valueType] = await Promise.all(
-						[keyTypeFile, valueTypeFile].map(typeFile =>
-							readType(fs.createReadStream(typeFile))
-						)
-					)
-					break
-				}
-				case 'hash_iter_break': {
+				case 'hashIterBreak': {
 					const iter: string | undefined = args[1]
 					if (!iter) throw new Error(`Syntax: ${type} iter`)
-					command = {type, iter: fromHexString(iter)}
-					responseType = voidReponseType
+					command = {[type]: {iter: fromHexString(iter)}}
+					responseType = voidResponseType
 					break
 				}
-				case 'list_create': {
+				case 'hashIterNext': {
+					const [iter, typeFile]: (string | undefined)[] = args.slice(1)
+					if (!(iter && typeFile)) {
+						throw new Error(`Syntax: ${type} iter typeFile`)
+					}
+					[keyType, valueType] = await lookupType(typeFile, 'KeyType', 'ValueType')
+					command = {[type]: {iter: fromHexString(iter)}}
+					responseType = optionalPairResponseType
+					break
+				}
+				case 'listCreate': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = voidReponseType
+					command = {[type]: {name}}
+					responseType = voidResponseType
 					break
 				}
-				case 'list_drop': {
+				case 'listDrop': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {type, name}
-					responseType = voidReponseType
+					command = {[type]: {name}}
+					responseType = voidResponseType
 					break
 				}
-				case 'list_get': {
+				case 'listGet': {
 					const [name, index, typeFile]: (string | undefined)[] = args.slice(1)
 					if (!(name && index && typeFile)) {
-						throw new Error(`Syntax: ${type} name index type_file`)
+						throw new Error(`Syntax: ${type} name index typeFile`)
 					}
-					command = {type, name, index: Number(index)}
+					[bytesType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {name, index: Number(index)}}
 					responseType = bytesResponseType
-					bytesType = await readType(fs.createReadStream(typeFile))
 					break
 				}
-				case 'list_set': {
+				case 'listSet': {
 					const [name, index, typeFile, value]: (string | undefined)[] = args.slice(1)
 					if (!(name && index && typeFile && value)) {
-						throw new Error(`Syntax: ${type} name index type_file value`)
+						throw new Error(`Syntax: ${type} name index typeFile value`)
 					}
-					const valueType = await readType(fs.createReadStream(typeFile))
-					command = {
-						type,
-						index: Number(index),
+					const [valueType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {
 						name,
-						value: valueType.valueBuffer(JSON.parse(value))
-					}
-					responseType = voidReponseType
+						index: Number(index),
+						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
+					}}
+					responseType = voidResponseType
 					break
 				}
-				case 'list_insert': {
+				case 'listInsert': {
 					const insertArguments = args.slice(1)
 					let name: string, index: string | undefined, typeFile: string, value: string
 					switch (insertArguments.length) {
@@ -225,16 +226,15 @@ async function processCommands() {
 							[name, index, typeFile, value] = insertArguments
 							break
 						default:
-							throw new Error(`Syntax: ${type} name [index] type_file value`)
+							throw new Error(`Syntax: ${type} name [index] typeFile value`)
 					}
-					const valueType = await readType(fs.createReadStream(typeFile))
-					command = {
-						type,
-						index: index ? Number(index) : null,
+					const [valueType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {
 						name,
-						value: valueType.valueBuffer(JSON.parse(value))
-					}
-					responseType = voidReponseType
+						index: index === undefined ? index : Number(index),
+						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
+					}}
+					responseType = voidResponseType
 					break
 				}
 				default:
@@ -248,42 +248,40 @@ async function processCommands() {
 
 		const client: net.Socket = net.createConnection(PORT)
 			.on('connect', () =>
-				client.end(new Uint8Array(commandType.valueBuffer(command)))
+				client.end(commandType.encode(commandType.fromObject(command)).finish())
 			)
 		const response = await new Promise((resolve, reject) => {
 			const responseChunks: Buffer[] = []
 			client
 				.on('data', chunk => responseChunks.push(chunk))
 				.on('end', () => {
-					let response = responseType.readValue(concat(responseChunks))
+					let response = responseType.toObject(
+						responseType.decode(concat(responseChunks)),
+						{defaults: true, longs: Number}
+					)
 					switch (responseType) {
-						case bytesResponseType: {
-							const bytesResponse: BytesResponse = response
-							if ('data' in bytesResponse) {
-								response = bytesType.readValue(bytesResponse.data)
+						case bytesResponseType:
+						case optionalBytesResponseType:
+							const bytesResponse: OptionalBytesResponse = response
+							if (!('none' in bytesResponse) && 'data' in bytesResponse) {
+								response = bytesType.toObject(
+									bytesType.decode(bytesResponse.data || new Uint8Array)
+								)
 							}
 							break
-						}
 						case iterResponseType:
 							const iterResponse: IterResponse = response
 							if ('iter' in iterResponse) {
 								response = toHexString(iterResponse.iter)
 							}
 							break
-						case optionalBytesResponseType: {
-							const bytesResponse: OptionalBytesResponse = response
-							if ('data' in bytesResponse && bytesResponse.data) {
-								response = bytesType.readValue(bytesResponse.data)
-							}
-							break
-						}
 						case optionalPairResponseType:
 							const pairResponse: OptionalPairResponse = response
 							if ('item' in pairResponse && pairResponse.item) {
 								const {key, value} = pairResponse.item
 								response = {
-									key: keyType.readValue(key),
-									value: valueType.readValue(value)
+									key: keyType.toObject(keyType.decode(key)),
+									value: valueType.toObject(valueType.decode(value))
 								}
 							}
 					}
@@ -291,7 +289,7 @@ async function processCommands() {
 				})
 				.on('error', reject)
 		})
-		console.log(response)
+		console.log(inspect(response, {depth: Infinity, colors: true}))
 	}
 }
 

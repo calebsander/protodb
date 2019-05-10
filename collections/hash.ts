@@ -23,7 +23,7 @@ import {
 	Header,
 	headerType
 } from '../pb/hash'
-import {ITER_BYTE_LENGTH} from '../sb-types/request'
+import {ITER_BYTE_LENGTH} from '../pb/request'
 import {toArrayBuffer} from '../util'
 
 const COLLECTION_TYPE = 'hash'
@@ -138,7 +138,7 @@ function checkNoIterators(name: string) {
 	}
 }
 
-function getIterator(iter: number[]): {key: string, iterator: HashIterator} {
+function getIterator(iter: Uint8Array): {key: string, iterator: HashIterator} {
 	const key = Buffer.from(iter).toString('hex')
 	const iterator = iterators.get(key)
 	if (!iterator) throw new Error('Unknown iterator')
@@ -179,6 +179,28 @@ export async function drop(name: string): Promise<void> {
 		removeFile(directoryFilename(name)),
 		removeFile(bucketsFilename(name))
 	])
+}
+
+// "delete" is a reserved name, so we use "remove" instead
+export async function remove(name: string, key: Uint8Array): Promise<void> {
+	await checkIsHash(name)
+	checkNoIterators(name)
+	const header = await getHeader(name)
+	const bucketIndex = depthHash(fullHash(key), header.depth)
+	const bucketPage = await getBucketPage(name, bucketIndex)
+	const bucket = await getBucket(name, bucketPage)
+	const {items} = bucket
+	for (let i = 0; i < items.length; i++) {
+		if (equal(items[i].key, key)) {
+			items.splice(i, 1)
+			header.size--
+			await Promise.all([
+				setBucket(name, bucketPage, bucket),
+				setHeader(name, header)
+			])
+			break
+		}
+	}
 }
 
 export async function get(name: string, key: Uint8Array): Promise<Uint8Array | null> {
@@ -266,43 +288,27 @@ export async function set(
 	}
 }
 
-export async function remove(name: string, key: Uint8Array): Promise<void> {
-	await checkIsHash(name)
-	checkNoIterators(name)
-	const header = await getHeader(name)
-	const bucketIndex = depthHash(fullHash(key), header.depth)
-	const bucketPage = await getBucketPage(name, bucketIndex)
-	const bucket = await getBucket(name, bucketPage)
-	const {items} = bucket
-	for (let i = 0; i < items.length; i++) {
-		if (equal(items[i].key, key)) {
-			items.splice(i, 1)
-			header.size--
-			await Promise.all([
-				setBucket(name, bucketPage, bucket),
-				setHeader(name, header)
-			])
-			break
-		}
-	}
-}
-
 export async function size(name: string): Promise<number> {
 	await checkIsHash(name)
 	const {size} = await getHeader(name)
 	return size
 }
 
-export async function iter(name: string): Promise<number[]> {
+export async function iter(name: string): Promise<Uint8Array> {
 	await checkIsHash(name)
 	iteratorCounts.set(name, (iteratorCounts.get(name) || 0) + 1)
 	const iter = await randomBytesPromise(ITER_BYTE_LENGTH)
 	const iterKey = iter.toString('hex')
 	iterators.set(iterKey, {name, iterator: hashEntries(name)})
-	return [...iter]
+	return iter
 }
 
-export async function iterNext(iter: number[]): Promise<BucketItem | null> {
+export function iterBreak(iter: Uint8Array): void {
+	const {key, iterator: {name}} = getIterator(iter)
+	iterClose(key, name)
+}
+
+export async function iterNext(iter: Uint8Array): Promise<BucketItem | null> {
 	const {key, iterator: {iterator, name}} = getIterator(iter)
 	const {value, done} = await iterator.next()
 	if (done) {
@@ -310,9 +316,4 @@ export async function iterNext(iter: number[]): Promise<BucketItem | null> {
 		return null
 	}
 	return value
-}
-
-export function iterBreak(iter: number[]): void {
-	const {key, iterator: {name}} = getIterator(iter)
-	iterClose(key, name)
 }

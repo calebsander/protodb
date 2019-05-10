@@ -1,4 +1,4 @@
-export function concat(buffers: Uint8Array[]): ArrayBuffer {
+export function concat(buffers: Uint8Array[]): Uint8Array {
 	const totalLength =
 		buffers.map(({length}) => length).reduce((a, b) => a + b, 0)
 	const result = new Uint8Array(totalLength)
@@ -7,7 +7,7 @@ export function concat(buffers: Uint8Array[]): ArrayBuffer {
 		result.set(buffer, offset)
 		offset += buffer.length
 	}
-	return result.buffer
+	return result
 }
 export const toArrayBuffer = ({buffer, byteOffset, byteLength}: Uint8Array) =>
 	!byteOffset && byteLength === buffer.byteLength

@@ -52,10 +52,10 @@ const setNode = (name: string, page: number, node: Node): Promise<void> =>
 		)
 	)
 
-async function lookup(name: string, index: number | null, insert = false): Promise<PathItem[]> {
+async function lookup(name: string, index?: number, insert = false): Promise<PathItem[]> {
 	const {child: {size, page}} = await getHeader(name)
-	if (index === null) {
-		if (!insert) throw new Error('Index null only allowed for insertion')
+	if (index === undefined) {
+		if (!insert) throw new Error('Undefined index only allowed for insertion')
 		index = size
 	}
 	else {
@@ -75,9 +75,11 @@ async function lookup(name: string, index: number | null, insert = false): Promi
 				{defaults: true, longs: Number}
 			)
 		)
-		path.push({page: lookupPage, index, node})
-		if ('leaf' in node) return path
+		const pathItem = {page: lookupPage, index, node}
+		path.push(pathItem)
+		if ('leaf' in node) break
 
+		let nodeIndex = 0
 		for (const {size, page} of node.inner.children) {
 			if (index < size || insert && index === size) {
 				lookupPage = page
@@ -85,8 +87,11 @@ async function lookup(name: string, index: number | null, insert = false): Promi
 			}
 
 			index -= size
+			nodeIndex++
 		}
+		pathItem.index = nodeIndex
 	}
+	return path
 }
 
 async function getFreePage(name: string, header: Header): Promise<number> {
@@ -149,19 +154,8 @@ export async function get(name: string, listIndex: number): Promise<Uint8Array> 
 	return node.leaf.values[index]
 }
 
-export async function set(
-	name: string, listIndex: number, value: Uint8Array
-): Promise<void> {
-	await checkIsList(name)
-	const path = await lookup(name, listIndex)
-	const [{page, index, node}] = path.slice(-1)
-	if ('inner' in node) throw new Error('Path does not end in a leaf?')
-	node.leaf.values[index] = value
-	await setNode(name, page, node)
-}
-
 export async function insert(
-	name: string, listIndex: number | null, value: Uint8Array
+	name: string, listIndex: number | undefined, value: Uint8Array
 ): Promise<void> {
 	await checkIsList(name)
 	const path = await lookup(name, listIndex, true)
@@ -216,4 +210,15 @@ export async function insert(
 	}
 	header.child.size++
 	await setHeader(name, header)
+}
+
+export async function set(
+	name: string, listIndex: number, value: Uint8Array
+): Promise<void> {
+	await checkIsList(name)
+	const path = await lookup(name, listIndex)
+	const [{page, index, node}] = path.slice(-1)
+	if ('inner' in node) throw new Error('Path does not end in a leaf?')
+	node.leaf.values[index] = value
+	await setNode(name, page, node)
 }

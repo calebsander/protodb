@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+message NameParams {
+	string name = 1;
+}
+message NameValueParams {
+	string name = 1;
+	bytes value = 2;
+}
+message NameKeyParams {
+	string name = 1;
+	bytes key = 2;
+}
+message NameKeyValueParams {
+	string name = 1;
+	bytes key = 2;
+	bytes value = 3;
+}
+message IterParams {
+	bytes iter = 1;
+}
+message NameIndexParams {
+	string name = 1;
+	int64 index = 2;
+}
+message NameIndexValueParams {
+	string name = 1;
+	int64 index = 2;
+	bytes value = 3;
+}
+message NameRangeParams {
+	string name = 1;
+	int64 start = 2;
+	int64 end = 3;
+}
+
+message Command {
+	oneof command {
+		EmptyType list = 1;
+
+		NameParams itemCreate = 2;
+		NameParams itemDrop = 3;
+		NameParams itemGet = 4;
+		NameValueParams itemSet = 5;
+
+		NameParams hashCreate = 6;
+		NameParams hashDrop = 7;
+		NameKeyParams hashDelete = 8;
+		NameKeyParams hashGet = 9;
+		NameKeyValueParams hashSet = 10;
+		NameParams hashSize = 11;
+		NameParams hashIter = 12;
+		IterParams hashIterBreak = 13;
+		IterParams hashIterNext = 14;
+
+		NameParams listCreate = 15;
+		NameParams listDrop = 16;
+		// NameIndexParams listDelete = 17;
+		NameIndexParams listGet = 18;
+		NameIndexValueParams listInsert = 19;
+		NameIndexValueParams listSet = 20;
+		// NameParams listSize = 21;
+		// NameRangeParams listIter = 22;
+		// IterParams listIterBreak = 23;
+		// IterParams listIterNext = 24;
+	}
+}
+
+message BytesResponse {
+	oneof response {
+		string error = 1;
+		bytes data = 2;
+	}
+}
+
+message IterResponse {
+	oneof response {
+		string error = 1;
+		bytes iter = 2;
+	}
+}
+
+message ListResponse {
+	oneof response {
+		string error = 1;
+		DB db = 2;
+	}
+}
+
+message OptionalBytesResponse {
+	oneof response {
+		string error = 1;
+		EmptyType none = 2;
+		bytes data = 3;
+	}
+}
+
+message KeyValuePair {
+	bytes key = 1;
+	bytes value = 2;
+}
+message OptionalPairResponse {
+	oneof response {
+		string error = 1;
+		KeyValuePair item = 2;
+	}
+}
+
+message SizeResponse {
+	oneof response {
+		string error = 1;
+		uint64 size = 2;
+	}
+}
+
+message VoidResponse {
+	oneof response { // wrapped in a oneof so it doesn't get a default value
+		string error = 1;
+	}
+}

@@ -35,10 +35,9 @@ async function cleanup(): Promise<void> {
 		const chunks: Buffer[] = []
 		connection
 			.on('data', chunk => chunks.push(chunk))
-			.on('end', async () => {
-				const response = await runCommand(concat(chunks))
-				connection.end(new Uint8Array(response))
-			})
+			.on('end', async () =>
+				connection.end(await runCommand(concat(chunks)))
+			)
 	}).listen(PORT)
 	console.log(`Listening on port ${PORT}`)
 })()

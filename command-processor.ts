@@ -1,177 +1,264 @@
+import {inspect} from 'util'
+import {Writer} from 'protobufjs'
 import {getCollections} from './collections'
 import * as item from './collections/item'
 import * as hash from './collections/hash'
 import * as list from './collections/list'
-import * as types from './sb-types/request'
-import {toArrayBuffer} from './util'
+import {Collections} from './pb/db'
+import {
+	IterParams,
+	NameParams,
+	NameIndexParams,
+	NameIndexValueParams,
+	NameKeyParams,
+	NameKeyValueParams,
+	NameValueParams,
+	BytesResponse,
+	ErrorResponse,
+	IterResponse,
+	ListResponse,
+	OptionalBytesResponse,
+	OptionalPairResponse,
+	SizeResponse,
+	VoidResponse,
+	commandType,
+	bytesResponseType,
+	iterResponseType,
+	listResponseType,
+	optionalBytesResponseType,
+	optionalPairResponseType,
+	sizeResponseType,
+	voidResponseType
+} from './pb/request'
 
-function errorToString(err: Error) {
+function errorToString(err: Error): ErrorResponse {
 	console.error(err)
 	const {name, message} = err
 	return {error: `${name}: ${message}`}
 }
 
-async function runList(): Promise<types.ListResponse> {
+async function runList(): Promise<ListResponse> {
+	let collections: Collections
 	try {
-		const dbCollections = await getCollections
-		const collections: types.Collection[] = []
-		for (const name in dbCollections) {
-			const collectionType = dbCollections[name]!
-			let type: types.CollectionType =
-				'item' in collectionType ? 'item' :
-				'hash' in collectionType ? 'hash' :
-				'list'
-			collections.push({name, type})
-		}
-		return {collections}
+		collections = await getCollections
 	}
 	catch (e) {
 		return errorToString(e)
 	}
+	return {db: {collections}}
 }
 const runItemCreate =
-	({name}: types.ItemCreateCommand): Promise<types.VoidResponse> =>
+	({name}: NameParams): Promise<VoidResponse> =>
 		item.create(name)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runItemDrop =
-	({name}: types.ItemDropCommand): Promise<types.VoidResponse> =>
+	({name}: NameParams): Promise<VoidResponse> =>
 		item.drop(name)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runItemGet =
-	({name}: types.ItemGetCommand): Promise<types.BytesResponse> =>
+	({name}: NameParams): Promise<BytesResponse> =>
 		item.get(name)
-			.then(data => ({data: toArrayBuffer(data)}))
+			.then(data => ({data}))
 			.catch(errorToString)
 const runItemSet =
-	({name, value}: types.ItemSetCommand): Promise<types.VoidResponse> =>
-		item.set(name, new Uint8Array(value))
+	({name, value}: NameValueParams): Promise<VoidResponse> =>
+		item.set(name, value || new Uint8Array)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashCreate =
-	({name}: types.HashCreateCommand): Promise<types.VoidResponse> =>
+	({name}: NameParams): Promise<VoidResponse> =>
 		hash.create(name)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashDrop =
-	({name}: types.HashDropCommand): Promise<types.VoidResponse> =>
+	({name}: NameParams): Promise<VoidResponse> =>
 		hash.drop(name)
 			.then(_ => ({}))
 			.catch(errorToString)
-const runHashGet =
-	({name, key}: types.HashGetCommand): Promise<types.OptionalBytesResponse> =>
-		hash.get(name, new Uint8Array(key))
-			.then(data => ({data: data && toArrayBuffer(data)}))
-			.catch(errorToString)
-const runHashSet =
-	({name, key, value}: types.HashSetCommand): Promise<types.VoidResponse> =>
-		hash.set(name, new Uint8Array(key), new Uint8Array(value))
+const runHashDelete =
+	({name, key}: NameKeyParams): Promise<VoidResponse> =>
+		hash.remove(name, key || new Uint8Array)
 			.then(_ => ({}))
 			.catch(errorToString)
-const runHashDelete =
-	({name, key}: types.HashDeleteCommand): Promise<types.VoidResponse> =>
-		hash.remove(name, new Uint8Array(key))
+const runHashGet =
+	({name, key}: NameKeyParams): Promise<OptionalBytesResponse> =>
+		hash.get(name, key || new Uint8Array)
+			.then<OptionalBytesResponse>(data => data ? {data} : {none: {}})
+			.catch(errorToString)
+const runHashSet =
+	({name, key, value}: NameKeyValueParams): Promise<VoidResponse> =>
+		hash.set(name, key || new Uint8Array, value || new Uint8Array)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashSize =
-	({name}: types.HashSizeCommand): Promise<types.UnsignedResponse> =>
+	({name}: NameParams): Promise<SizeResponse> =>
 		hash.size(name)
-			.then(value => ({value}))
+			.then(size => ({size}))
 			.catch(errorToString)
 const runHashIter =
-	({name}: types.HashIterCommand): Promise<types.IterResponse> =>
+	({name}: NameParams): Promise<IterResponse> =>
 		hash.iter(name)
 			.then(iter => ({iter}))
 			.catch(errorToString)
-const runHashIterNext =
-	({iter}: types.HashIterNextCommand): Promise<types.OptionalPairResponse> =>
-		hash.iterNext(iter)
-			.then(item => ({
-				item: item &&
-					{key: toArrayBuffer(item.key), value: toArrayBuffer(item.value)}
-			}))
-			.catch(errorToString)
-function runHashIterBreak({iter}: types.HashIterBreakCommand): types.VoidResponse {
+function runHashIterBreak({iter}: IterParams): VoidResponse {
 	try {
 		hash.iterBreak(iter)
-		return {}
 	}
 	catch (e) {
 		return errorToString(e)
 	}
+	return {}
 }
+const runHashIterNext =
+	({iter}: IterParams): Promise<OptionalPairResponse> =>
+		hash.iterNext(iter)
+			.then(item => item ? {item} : {})
+			.catch(errorToString)
 const runListCreate =
-	({name}: types.ListCreateCommand): Promise<types.VoidResponse> =>
+	({name}: NameParams): Promise<VoidResponse> =>
 		list.create(name)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runListDrop =
-	({name}: types.ListDropCommand): Promise<types.VoidResponse> =>
+	({name}: NameParams): Promise<VoidResponse> =>
 		list.drop(name)
 			.then(_ => ({}))
 			.catch(errorToString)
-const runListGet =
-	({name, index}: types.ListGetCommand): Promise<types.BytesResponse> =>
-		list.get(name, index)
-			.then(data => ({data: data && toArrayBuffer(data)}))
-			.catch(errorToString)
-const runListSet =
-	({name, index, value}: types.ListSetCommand): Promise<types.VoidResponse> =>
-		list.set(name, index, new Uint8Array(value))
-			.then(_ => ({}))
-			.catch(errorToString)
-const runListInsert =
-	({name, index, value}: types.ListInsertCommand): Promise<types.VoidResponse> =>
-		list.insert(name, index, new Uint8Array(value))
-			.then(_ => ({}))
-			.catch(errorToString)
+async function runListGet(
+	{name, index}: NameIndexParams
+): Promise<BytesResponse> {
+	if (index === undefined) throw new Error('Missing index')
 
-export async function runCommand(data: ArrayBuffer): Promise<ArrayBuffer> {
-	const command = types.commandType.readValue(data)
-	switch (command.type) {
-		case 'list':
-			return types.listReponseType.valueBuffer(await runList())
-		case 'item_create':
-			return types.voidReponseType.valueBuffer(await runItemCreate(command))
-		case 'item_drop':
-			return types.voidReponseType.valueBuffer(await runItemDrop(command))
-		case 'item_get':
-			return types.bytesResponseType.valueBuffer(await runItemGet(command))
-		case 'item_set':
-			return types.voidReponseType.valueBuffer(await runItemSet(command))
-		case 'hash_create':
-			return types.voidReponseType.valueBuffer(await runHashCreate(command))
-		case 'hash_drop':
-			return types.voidReponseType.valueBuffer(await runHashDrop(command))
-		case 'hash_get':
-			return types.optionalBytesResponseType.valueBuffer(await runHashGet(command))
-		case 'hash_set':
-			return types.voidReponseType.valueBuffer(await runHashSet(command))
-		case 'hash_delete':
-			return types.voidReponseType.valueBuffer(await runHashDelete(command))
-		case 'hash_size':
-			return types.unsignedResponseType.valueBuffer(await runHashSize(command))
-		case 'hash_iter':
-			return types.iterResponseType.valueBuffer(await runHashIter(command))
-		case 'hash_iter_next':
-			return types.optionalPairResponseType.valueBuffer(await runHashIterNext(command))
-		case 'hash_iter_break':
-			return types.voidReponseType.valueBuffer(runHashIterBreak(command))
-		case 'list_create':
-			return types.voidReponseType.valueBuffer(await runListCreate(command))
-		case 'list_drop':
-			return types.voidReponseType.valueBuffer(await runListDrop(command))
-		case 'list_get':
-			return types.bytesResponseType.valueBuffer(await runListGet(command))
-		case 'list_set':
-			return types.voidReponseType.valueBuffer(await runListSet(command))
-		case 'list_insert':
-			return types.voidReponseType.valueBuffer(await runListInsert(command))
-		default:
-			const unreachable: never = command
-			unreachable
-			console.error('Unrecognized command')
-			return new ArrayBuffer(0)
+	let data: Uint8Array
+	try {
+		data = await list.get(name, index)
 	}
+	catch (e) {
+		return errorToString(e)
+	}
+	return {data}
+}
+const runListInsert =
+	({name, index, value}: NameIndexValueParams): Promise<VoidResponse> =>
+		list.insert(name, index, value || new Uint8Array)
+			.then(_ => ({}))
+			.catch(errorToString)
+async function runListSet(
+	{name, index, value}: NameIndexValueParams
+): Promise<VoidResponse> {
+	if (index === undefined) throw new Error('Missing index')
+
+	try {
+		await list.set(name, index, value || new Uint8Array)
+	}
+	catch (e) {
+		return errorToString(e)
+	}
+	return {}
+}
+
+export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
+	const command = commandType.toObject(commandType.decode(data), {longs: Number})
+	let writer: Writer
+	if ('list' in command) {
+		writer = listResponseType.encode(listResponseType.fromObject(await runList()))
+	}
+	else if ('itemCreate' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runItemCreate(command.itemCreate)
+		))
+	}
+	else if ('itemDrop' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runItemDrop(command.itemDrop)
+		))
+	}
+	else if ('itemGet' in command) {
+		writer = bytesResponseType.encode(bytesResponseType.fromObject(
+			await runItemGet(command.itemGet)
+		))
+	}
+	else if ('itemSet' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runItemSet(command.itemSet)
+		))
+	}
+	else if ('hashCreate' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runHashCreate(command.hashCreate)
+		))
+	}
+	else if ('hashDrop' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runHashDrop(command.hashDrop)
+		))
+	}
+	else if ('hashDelete' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runHashDelete(command.hashDelete)
+		))
+	}
+	else if ('hashGet' in command) {
+		writer = optionalBytesResponseType.encode(optionalBytesResponseType.fromObject(
+			await runHashGet(command.hashGet)
+		))
+	}
+	else if ('hashSet' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runHashSet(command.hashSet)
+		))
+	}
+	else if ('hashSize' in command) {
+		writer = sizeResponseType.encode(sizeResponseType.fromObject(
+			await runHashSize(command.hashSize)
+		))
+	}
+	else if ('hashIter' in command) {
+		writer = iterResponseType.encode(iterResponseType.fromObject(
+			await runHashIter(command.hashIter)
+		))
+	}
+	else if ('hashIterBreak' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			runHashIterBreak(command.hashIterBreak)
+		))
+	}
+	else if ('hashIterNext' in command) {
+		writer = optionalPairResponseType.encode(optionalPairResponseType.fromObject(
+			await runHashIterNext(command.hashIterNext)
+		))
+	}
+	else if ('listCreate' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runListCreate(command.listCreate)
+		))
+	}
+	else if ('listDrop' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runListDrop(command.listDrop)
+		))
+	}
+	else if ('listGet' in command) {
+		writer = bytesResponseType.encode(bytesResponseType.fromObject(
+			await runListGet(command.listGet)
+		))
+	}
+	else if ('listInsert' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runListInsert(command.listInsert)
+		))
+	}
+	else if ('listSet' in command) {
+		writer = voidResponseType.encode(voidResponseType.fromObject(
+			await runListSet(command.listSet)
+		))
+	}
+	else {
+		const unreachable: never = command
+		unreachable
+		throw new Error('Unexpected command: ' + inspect(command))
+	}
+	return writer.finish()
 }
