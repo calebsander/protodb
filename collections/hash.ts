@@ -63,7 +63,7 @@ async function getHeader(name: string): Promise<Header> {
 }
 
 function setHeader(name: string, header: Header): Promise<void> {
-	const contents = headerType.encode(headerType.fromObject(header)).finish()
+	const contents = headerType.encode(header).finish()
 	return setFileSegment(directoryFilename(name), contents, 0, HEADER_BYTES)
 }
 
@@ -77,9 +77,7 @@ const getBucket = (name: string, page: number): Promise<Bucket> =>
 
 const setBucket = (name: string, page: number, bucket: Bucket): Promise<void> =>
 	new FilePage(bucketsFilename(name), page).use(async page =>
-		new Uint8Array(page).set(
-			bucketType.encodeDelimited(bucketType.fromObject(bucket)).finish()
-		)
+		new Uint8Array(page).set(bucketType.encodeDelimited(bucket).finish())
 	)
 
 async function addBucket(name: string, page: number, bucket: Bucket): Promise<void> {
@@ -98,7 +96,7 @@ async function getBucketPage(name: string, bucket: number): Promise<number> {
 const setBucketPage = (name: string, bucket: number, page: number): Promise<void> =>
 	setFileSegment(
 		directoryFilename(name),
-		bucketIndexType.encode(bucketIndexType.fromObject({page})).finish(),
+		bucketIndexType.encode({page}).finish(),
 		locateBucketIndex(bucket),
 		BUCKET_INDEX_BYTES
 	)

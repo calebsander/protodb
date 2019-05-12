@@ -7,7 +7,7 @@ bucketIndex[2 ** depth] (BucketIndex)
 */
 
 message Header {
-	fixed32 depth = 1;
+	uint32 depth = 1; // should always be < 128, so encoding will take 1 byte
 	fixed64 size = 2;
 }
 

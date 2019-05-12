@@ -168,102 +168,64 @@ export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	const command = commandType.toObject(commandType.decode(data), {longs: Number})
 	let writer: Writer
 	if ('list' in command) {
-		writer = listResponseType.encode(listResponseType.fromObject(await runList()))
+		writer = listResponseType.encode(await runList())
 	}
 	else if ('itemCreate' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runItemCreate(command.itemCreate)
-		))
+		writer = voidResponseType.encode(await runItemCreate(command.itemCreate))
 	}
 	else if ('itemDrop' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runItemDrop(command.itemDrop)
-		))
+		writer = voidResponseType.encode(await runItemDrop(command.itemDrop))
 	}
 	else if ('itemGet' in command) {
-		writer = bytesResponseType.encode(bytesResponseType.fromObject(
-			await runItemGet(command.itemGet)
-		))
+		writer = bytesResponseType.encode(await runItemGet(command.itemGet))
 	}
 	else if ('itemSet' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runItemSet(command.itemSet)
-		))
+		writer = voidResponseType.encode(await runItemSet(command.itemSet))
 	}
 	else if ('hashCreate' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runHashCreate(command.hashCreate)
-		))
+		writer = voidResponseType.encode(await runHashCreate(command.hashCreate))
 	}
 	else if ('hashDrop' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runHashDrop(command.hashDrop)
-		))
+		writer = voidResponseType.encode(await runHashDrop(command.hashDrop))
 	}
 	else if ('hashDelete' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runHashDelete(command.hashDelete)
-		))
+		writer = voidResponseType.encode(await runHashDelete(command.hashDelete))
 	}
 	else if ('hashGet' in command) {
-		writer = optionalBytesResponseType.encode(optionalBytesResponseType.fromObject(
-			await runHashGet(command.hashGet)
-		))
+		writer = optionalBytesResponseType.encode(await runHashGet(command.hashGet))
 	}
 	else if ('hashSet' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runHashSet(command.hashSet)
-		))
+		writer = voidResponseType.encode(await runHashSet(command.hashSet))
 	}
 	else if ('hashSize' in command) {
-		writer = sizeResponseType.encode(sizeResponseType.fromObject(
-			await runHashSize(command.hashSize)
-		))
+		writer = sizeResponseType.encode(await runHashSize(command.hashSize))
 	}
 	else if ('hashIter' in command) {
-		writer = iterResponseType.encode(iterResponseType.fromObject(
-			await runHashIter(command.hashIter)
-		))
+		writer = iterResponseType.encode(await runHashIter(command.hashIter))
 	}
 	else if ('hashIterBreak' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			runHashIterBreak(command.hashIterBreak)
-		))
+		writer = voidResponseType.encode(runHashIterBreak(command.hashIterBreak))
 	}
 	else if ('hashIterNext' in command) {
-		writer = optionalPairResponseType.encode(optionalPairResponseType.fromObject(
-			await runHashIterNext(command.hashIterNext)
-		))
+		writer = optionalPairResponseType.encode(await runHashIterNext(command.hashIterNext))
 	}
 	else if ('listCreate' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runListCreate(command.listCreate)
-		))
+		writer = voidResponseType.encode(await runListCreate(command.listCreate))
 	}
 	else if ('listDrop' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runListDrop(command.listDrop)
-		))
+		writer = voidResponseType.encode(await runListDrop(command.listDrop))
 	}
 	else if ('listGet' in command) {
-		writer = bytesResponseType.encode(bytesResponseType.fromObject(
-			await runListGet(command.listGet)
-		))
+		writer = bytesResponseType.encode(await runListGet(command.listGet))
 	}
 	else if ('listInsert' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runListInsert(command.listInsert)
-		))
+		writer = voidResponseType.encode(await runListInsert(command.listInsert))
 	}
 	else if ('listSet' in command) {
-		writer = voidResponseType.encode(voidResponseType.fromObject(
-			await runListSet(command.listSet)
-		))
+		writer = voidResponseType.encode(await runListSet(command.listSet))
 	}
 	else if ('listSize' in command) {
-		writer = sizeResponseType.encode(sizeResponseType.fromObject(
-			await runListSize(command.listSize)
-		))
+		writer = sizeResponseType.encode(await runListSize(command.listSize))
 	}
 	else {
 		const unreachable: never = command

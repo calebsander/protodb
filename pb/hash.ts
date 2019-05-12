@@ -10,9 +10,7 @@ export interface Header {
 }
 export const headerType = protoFile.lookupType('Header') as Type<Header>
 export const HEADER_BYTES =
-	headerType.encode(headerType.fromObject({depth: 0, size: 0}))
-		.finish()
-		.length
+	headerType.encode({depth: 0, size: 0}).finish().length
 
 export interface BucketIndex {
 	page: number
@@ -20,9 +18,7 @@ export interface BucketIndex {
 export const bucketIndexType =
 	protoFile.lookupType('BucketIndex') as Type<BucketIndex>
 export const BUCKET_INDEX_BYTES =
-	bucketIndexType.encode(bucketIndexType.fromObject({page: 0}))
-		.finish()
-		.length
+	bucketIndexType.encode({page: 0}).finish().length
 
 export interface BucketItem {
 	key: Uint8Array

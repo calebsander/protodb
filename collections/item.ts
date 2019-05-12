@@ -45,6 +45,5 @@ export async function get(name: string): Promise<Uint8Array> {
 
 export async function set(name: string, value: Uint8Array): Promise<void> {
 	await checkIsItem(name)
-	const writer = itemType.encodeDelimited(itemType.fromObject({value}))
-	await setFile(filename(name), writer.finish())
+	await setFile(filename(name), itemType.encodeDelimited({value}).finish())
 }

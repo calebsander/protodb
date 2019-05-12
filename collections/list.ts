@@ -41,15 +41,11 @@ const getHeader = (name: string): Promise<Header> =>
 	)
 const setHeader = (name: string, header: Header): Promise<void> =>
 	new FilePage(filename(name), HEADER_PAGE).use(async page =>
-		new Uint8Array(page).set(
-			headerType.encodeDelimited(headerType.fromObject(header)).finish()
-		)
+		new Uint8Array(page).set(headerType.encodeDelimited(header).finish())
 	)
 const setNode = (name: string, page: number, node: Node): Promise<void> =>
 	new FilePage(filename(name), page).use(async page =>
-		new Uint8Array(page).set(
-			nodeType.encodeDelimited(nodeType.fromObject(node)).finish()
-		)
+		new Uint8Array(page).set(nodeType.encodeDelimited(node).finish())
 	)
 
 async function lookup(name: string, index?: number, insert = false): Promise<PathItem[]> {

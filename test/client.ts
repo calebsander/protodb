@@ -254,9 +254,7 @@ async function processCommands() {
 		}
 
 		const client: net.Socket = net.createConnection(PORT)
-			.on('connect', () =>
-				client.end(commandType.encode(commandType.fromObject(command)).finish())
-			)
+			.on('connect', () => client.end(commandType.encode(command).finish()))
 		const response = await new Promise((resolve, reject) => {
 			const responseChunks: Buffer[] = []
 			client

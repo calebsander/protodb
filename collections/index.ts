@@ -13,8 +13,7 @@ export const getCollections = getFile(DB_FILE)
 	.catch<Collections>(_ => ({}))
 async function saveCollections(): Promise<void> {
 	const collections = await getCollections
-	const message = dbType.fromObject({collections})
-	await setFile(DB_FILE, dbType.encodeDelimited(message).finish())
+	await setFile(DB_FILE, dbType.encodeDelimited({collections}).finish())
 }
 export async function addCollection(
 	name: string, collection: CollectionType
