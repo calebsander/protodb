@@ -222,3 +222,9 @@ export async function set(
 	node.leaf.values[index] = value
 	await setNode(name, page, node)
 }
+
+export async function size(name: string): Promise<number> {
+	await checkIsList(name)
+	const {child: {size}} = await getHeader(name)
+	return size
+}

@@ -158,6 +158,11 @@ async function runListSet(
 	}
 	return {}
 }
+const runListSize =
+	({name}: NameParams): Promise<SizeResponse> =>
+		list.size(name)
+			.then(size => ({size}))
+			.catch(errorToString)
 
 export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	const command = commandType.toObject(commandType.decode(data), {longs: Number})
@@ -253,6 +258,11 @@ export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	else if ('listSet' in command) {
 		writer = voidResponseType.encode(voidResponseType.fromObject(
 			await runListSet(command.listSet)
+		))
+	}
+	else if ('listSize' in command) {
+		writer = sizeResponseType.encode(sizeResponseType.fromObject(
+			await runListSize(command.listSize)
 		))
 	}
 	else {

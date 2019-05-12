@@ -59,6 +59,7 @@ export type Command
 	| {listGet: NameIndexParams}
 	| {listInsert: NameIndexValueParams}
 	| {listSet: NameIndexValueParams}
+	| {listSize: NameParams}
 export const commandType = protoFile.lookupType('Command') as Type<Command>
 
 export interface ErrorResponse {

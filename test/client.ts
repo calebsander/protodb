@@ -201,20 +201,6 @@ async function processCommands() {
 					responseType = bytesResponseType
 					break
 				}
-				case 'listSet': {
-					const [name, index, typeFile, value]: (string | undefined)[] = args.slice(1)
-					if (!(name && index && typeFile && value)) {
-						throw new Error(`Syntax: ${type} name index typeFile value`)
-					}
-					const [valueType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {
-						name,
-						index: Number(index),
-						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
-					}}
-					responseType = voidResponseType
-					break
-				}
 				case 'listInsert': {
 					const insertArguments = args.slice(1)
 					let name: string, index: string | undefined, typeFile: string, value: string
@@ -235,6 +221,27 @@ async function processCommands() {
 						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
 					}}
 					responseType = voidResponseType
+					break
+				}
+				case 'listSet': {
+					const [name, index, typeFile, value]: (string | undefined)[] = args.slice(1)
+					if (!(name && index && typeFile && value)) {
+						throw new Error(`Syntax: ${type} name index typeFile value`)
+					}
+					const [valueType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {
+						name,
+						index: Number(index),
+						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
+					}}
+					responseType = voidResponseType
+					break
+				}
+				case 'listSize': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {[type]: {name}}
+					responseType = sizeResponseType
 					break
 				}
 				default:
