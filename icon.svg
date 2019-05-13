@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+	<g class="layer">
+		<path d="m28.587632,194.848025l27.18024,-129.84497l90.60079,0l27.18023,129.84497l-144.96125,0l-0.00001,0z" fill="#4c4c4c" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" transform="rotate(-180 101.068 129.926)"/>
+		<path d="m29.481123,74.764149c9.433963,43.396227 23.113207,91.037736 70.990566,91.273585c47.877359,0.235849 63.443396,-49.292453 74.292453,-92.216981c10.849056,-42.924528 -154.716981,-42.452831 -145.283019,0.943396z" fill="#000000" stroke="#7f7f7f" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null"/>
+		<path d="m39.038288,77.435728c8.185872,37.65501 20.055385,78.993661 61.598683,79.198307c41.543299,0.204647 55.049986,-42.771179 64.463739,-80.016894c9.413752,-37.245715 -134.248293,-36.836423 -126.062422,0.818587z" fill="#4c4c4c" stroke="#7f7f7f" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null"/>
+		<ellipse cx="100.873582" cy="64.979245" fill="#000000" rx="73" ry="20" stroke="#7f7f7f" stroke-width="8"/>
+		<polygon fill="#000000"/>
+		<path d="m67.505702,78.169045l-38.92592,-66.66073l12.7907,-7.71279l44.29643,76.16344l-18.16121,-1.78992z" fill="#ffffff" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null"/>
+		<path d="m75.855652,79.182315l20.02319,-57.60833l15.35088,4.82456l-17.98246,53.89835l-17.39161,-1.11458z" fill="#ffffff" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null"/>
+		<path d="m110.944032,80.125725l57.94379,-63.67847l10.54481,10.17733l-47.50172,51.81254l-20.98688,1.6886z" fill="#ffffff" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="null"/>
+		<path d="m118.144402,79.823295l-12.26186,-74.67129l15.89104,-2.32426l13.10348,75.21795l-16.73266,1.7776z" fill="#ffffff" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="null"/>
+		<text fill="#ff0000" font-family="Monospace" font-size="24" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" text-anchor="middle" transform="rotate(59.67 54.5043 41.4659) matrix(0.646053 0 0 0.646053 40.3283 27.701)" x="22.09276" xml:space="preserve" y="29.394759">70 72 6F</text>
+		<text fill="#ffb600" font-family="Monospace" font-size="24" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" text-anchor="middle" transform="rotate(-70.424 95.0137 51.8947) matrix(0.646053 0 0 0.646053 40.3283 27.701)" x="84.42488" xml:space="preserve" y="45.547559">74 6F</text>
+		<text fill="#028c45" font-family="Monospace" font-size="24" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" text-anchor="middle" transform="rotate(79.9163 119.509 36.717) matrix(0.646053 0 0 0.646053 40.3283 27.701)" x="121.57353" xml:space="preserve" y="22.329649">44 42</text>
+		<text fill="#4800bc" font-family="Monospace" font-size="24" stroke="#000000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" text-anchor="middle" transform="rotate(-46.8524 152.925 44.8873) matrix(0.646053 0 0 0.646053 40.3283 27.701)" x="174.20079" xml:space="preserve" y="34.712539">01 00</text>
+	</g>
+</svg>
