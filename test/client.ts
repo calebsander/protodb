@@ -67,7 +67,7 @@ async function processCommands() {
 					break
 				}
 				case 'itemGet': {
-					const [name, typeFile]: (string | undefined)[] = args.slice(1)
+					const [name, typeFile] = args.slice(1) as (string | undefined)[]
 					if (!(name && typeFile)) {
 						throw new Error(`Syntax: ${type} name typeFile`)
 					}
@@ -77,7 +77,7 @@ async function processCommands() {
 					break
 				}
 				case 'itemSet': {
-					const [name, typeFile, value]: (string | undefined)[] = args.slice(1)
+					const [name, typeFile, value] = args.slice(1) as (string | undefined)[]
 					if (!(name && typeFile && value)) {
 						throw new Error(`Syntax: ${type} name typeFile value`)
 					}
@@ -104,7 +104,7 @@ async function processCommands() {
 					break
 				}
 				case 'hashDelete': {
-					const [name, typeFile, key]: (string | undefined)[] = args.slice(1)
+					const [name, typeFile, key] = args.slice(1) as (string | undefined)[]
 					if (!(name && typeFile && key)) {
 						throw new Error(`Syntax: ${type} name typeFile key`)
 					}
@@ -117,7 +117,7 @@ async function processCommands() {
 					break
 				}
 				case 'hashGet': {
-					const [name, typeFile, key]: (string | undefined)[] = args.slice(1)
+					const [name, typeFile, key] = args.slice(1) as (string | undefined)[]
 					if (!(name && typeFile && key)) {
 						throw new Error(`Syntax: ${type} name typeFile key`)
 					}
@@ -132,7 +132,7 @@ async function processCommands() {
 					break
 				}
 				case 'hashSet': {
-					const [name, typeFile, key, value]: (string | undefined)[] = args.slice(1)
+					const [name, typeFile, key, value] = args.slice(1) as (string | undefined)[]
 					if (!(name && typeFile && key && value)) {
 						throw new Error(`Syntax: ${type} name typeFile key value`)
 					}
@@ -168,7 +168,7 @@ async function processCommands() {
 					break
 				}
 				case 'hashIterNext': {
-					const [iter, typeFile]: (string | undefined)[] = args.slice(1)
+					const [iter, typeFile] = args.slice(1) as (string | undefined)[]
 					if (!(iter && typeFile)) {
 						throw new Error(`Syntax: ${type} iter typeFile`)
 					}
@@ -191,8 +191,18 @@ async function processCommands() {
 					responseType = voidResponseType
 					break
 				}
+				case 'listDelete': {
+					const [name, index] = args.slice(1) as (string | undefined)[]
+					if (!name) throw new Error(`Syntax: ${type} name [index]`)
+					command = {[type]: {
+						name,
+						index: index === undefined ? index : Number(index)
+					}}
+					responseType = voidResponseType
+					break
+				}
 				case 'listGet': {
-					const [name, index, typeFile]: (string | undefined)[] = args.slice(1)
+					const [name, index, typeFile] = args.slice(1) as (string | undefined)[]
 					if (!(name && index && typeFile)) {
 						throw new Error(`Syntax: ${type} name index typeFile`)
 					}
@@ -224,7 +234,7 @@ async function processCommands() {
 					break
 				}
 				case 'listSet': {
-					const [name, index, typeFile, value]: (string | undefined)[] = args.slice(1)
+					const [name, index, typeFile, value] = args.slice(1) as (string | undefined)[]
 					if (!(name && index && typeFile && value)) {
 						throw new Error(`Syntax: ${type} name index typeFile value`)
 					}

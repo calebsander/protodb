@@ -56,6 +56,7 @@ export type Command
 
 	| {listCreate: NameParams}
 	| {listDrop: NameParams}
+	| {listDelete: NameIndexParams}
 	| {listGet: NameIndexParams}
 	| {listInsert: NameIndexValueParams}
 	| {listSet: NameIndexValueParams}

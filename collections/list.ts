@@ -1,8 +1,10 @@
 import * as path from 'path'
+import {Reader} from 'protobufjs'
 import {addCollection, dropCollection, getCollections} from '.'
-import {createFile, FilePage, getPageCount, removeFile, setPageCount} from '../cache'
+import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
 import {DATA_DIR} from '../constants'
 import {
+	Child,
 	FREE_LIST_END,
 	freePageType,
 	Header,
@@ -14,6 +16,7 @@ import {
 const COLLECTION_TYPE = 'list'
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
+const MIN_NODE_LENGTH = Math.floor(PAGE_SIZE * 0.4)
 
 const filename = (name: string) =>
 	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}`)
@@ -43,6 +46,17 @@ const setHeader = (name: string, header: Header): Promise<void> =>
 	new FilePage(filename(name), HEADER_PAGE).use(async page =>
 		new Uint8Array(page).set(headerType.encodeDelimited(header).finish())
 	)
+const getNode = (name: string, page: number): Promise<Node> =>
+	new FilePage(filename(name), page).use(async page =>
+		nodeType.toObject(
+			nodeType.decodeDelimited(new Uint8Array(page)),
+			{defaults: true, longs: Number}
+		)
+	)
+const getNodeLength = (name: string, page: number): Promise<number> =>
+	new FilePage(filename(name), page).use(async page =>
+		new Reader(new Uint8Array(page)).uint32()
+	)
 const setNode = (name: string, page: number, node: Node): Promise<void> =>
 	new FilePage(filename(name), page).use(async page =>
 		new Uint8Array(page).set(nodeType.encodeDelimited(node).finish())
@@ -50,27 +64,16 @@ const setNode = (name: string, page: number, node: Node): Promise<void> =>
 
 async function lookup(name: string, index?: number, insert = false): Promise<PathItem[]> {
 	const {child: {size, page}} = await getHeader(name)
-	if (index === undefined) {
-		if (!insert) throw new Error('Undefined index only allowed for insertion')
-		index = size
-	}
-	else {
-		if (index < 0) index += size
-		if (index < 0 || !(index < size || insert && index === size)) {
-			throw new Error(`Index ${index} is out of bounds in list of size ${size}`)
-		}
+	if (index === undefined) index = insert ? size : size - 1
+	if (index < 0) index += size
+	if (index < 0 || !(index < size || insert && index === size)) {
+		throw new Error(`Index ${index} is out of bounds in list of size ${size}`)
 	}
 
-	const file = filename(name)
 	const path: PathItem[] = []
 	let lookupPage = page
 	while (true) {
-		const node = await new FilePage(file, lookupPage).use(async page =>
-			nodeType.toObject(
-				nodeType.decodeDelimited(new Uint8Array(page)),
-				{defaults: true, longs: Number}
-			)
-		)
+		const node = await getNode(name, lookupPage)
 		const pathItem = {page: lookupPage, index, node}
 		path.push(pathItem)
 		if ('leaf' in node) break
@@ -105,8 +108,18 @@ async function getFreePage(name: string, header: Header): Promise<number> {
 		return freePage
 	}
 }
+const addFreePage = (name: string, header: Header, pageNo: number): Promise<void> =>
+	new FilePage(filename(name), pageNo).use(async page => {
+		const {freePage} = header
+		new Uint8Array(page).set(freePageType.encodeDelimited(freePage).finish())
+		freePage.next = pageNo
+	})
 
 const split = <T>(arr: T[]): T[] => arr.splice(arr.length >> 1)
+function concat<T>(arr: T[], other: T[], left: boolean): void {
+	if (left) arr.splice(0, 0, ...other)
+	else arr.push(...other)
+}
 
 const nodeSize = (node: Node) =>
 	'inner' in node
@@ -121,6 +134,75 @@ function getParent(path: PathItem[]) {
 	if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
 	const {children} = parentNode.inner
 	return {children, index}
+}
+
+interface Sibling {
+	left: boolean
+	siblingIndex: number
+	sibling: Child
+}
+async function tryCoalesce(
+	name: string, node: Node, path: PathItem[], header: Header
+): Promise<boolean> {
+	const parent = getParent(path)
+	if (!parent) return false // root node can't be coalesced
+	const {len} = nodeType.encodeDelimited(node)
+	if (len >= MIN_NODE_LENGTH) return false // ensure node is sufficiently empty
+	const {children, index} = parent
+	const siblings = [true, false]
+		.map(left => {
+			const siblingIndex = left ? index - 1 : index + 1
+			return {left, siblingIndex, sibling: children[siblingIndex]}
+		})
+		.filter(({sibling}) => sibling) // skip siblings that don't exist
+	const lengths = await Promise.all(siblings.map(
+		({sibling}) => getNodeLength(name, sibling.page)
+	))
+	let coalesceSibling: Sibling | undefined
+	let maxSiblingLength = 0
+	lengths.forEach((length, i) => {
+		if (length < MIN_NODE_LENGTH && length > maxSiblingLength) {
+			coalesceSibling = siblings[i]
+			maxSiblingLength = length
+		}
+	})
+	if (!coalesceSibling) return false // node must have a sibling with free space
+
+	// Coalesce with selected sibling
+	const {left, siblingIndex, sibling: {page: siblingPage}} = coalesceSibling
+	const siblingNode = await getNode(name, siblingPage)
+	if ('inner' in node) {
+		if ('leaf' in siblingNode) throw new Error('Invalid sibling')
+		concat(node.inner.children, siblingNode.inner.children, left)
+	}
+	else {
+		if ('inner' in siblingNode) throw new Error('Invalid sibling')
+		concat(node.leaf.values, siblingNode.leaf.values, left)
+	}
+	const thisChild = children[index]
+	const promises = [(async () => {
+		await setNode(name, thisChild.page, node)
+		// Must wait to overwrite sibling until new page has been written since
+		// leaf values are slices of the sibling page
+		await addFreePage(name, header, siblingPage)
+	})()]
+
+	// Update parent
+	thisChild.size = nodeSize(node)
+	children.splice(siblingIndex, 1)
+
+	// Make grandparent point directly to this page if it has no more siblings
+	if (children.length === 1) {
+		path.pop()
+		const grandParent = getParent(path)
+		const child = grandParent
+			? grandParent.children[grandParent.index]
+			: header.child
+		promises.push(addFreePage(name, header, child.page))
+		Object.assign(child, thisChild)
+	}
+	await Promise.all(promises)
+	return true
 }
 
 export async function create(name: string): Promise<void> {
@@ -140,6 +222,29 @@ export async function create(name: string): Promise<void> {
 export async function drop(name: string): Promise<void> {
 	await checkIsList(name)
 	await Promise.all([dropCollection(name), removeFile(filename(name))])
+}
+
+// "delete" is a reserved name, so we use "remove" instead
+export async function remove(name: string, listIndex?: number): Promise<void> {
+	await checkIsList(name)
+	const path = await lookup(name, listIndex)
+	const [{index, node}] = path.slice(-1)
+	if ('inner' in node) throw new Error('Path does not end in a leaf?')
+	node.leaf.values.splice(index, 1)
+	const header = await getHeader(name)
+	while (path.length) {
+		const {page, node} = path.pop()!
+		const coalesced = await tryCoalesce(name, node, path, header)
+		if (!coalesced) {
+			await setNode(name, page, node)
+			const parent = getParent(path)
+			const parentChild = parent
+				? parent.children[parent.index]
+				: header.child
+			parentChild.size--
+		}
+	}
+	await setHeader(name, header)
 }
 
 export async function get(name: string, listIndex: number): Promise<Uint8Array> {

@@ -2,6 +2,8 @@ import * as fs from 'fs'
 import {promisify} from 'util'
 import {LOG_PAGE_SIZE, PAGE_SIZE, mmap} from './mmap-wrapper'
 
+export {PAGE_SIZE}
+
 const close = promisify(fs.close),
       open = promisify(fs.open),
       stat = promisify(fs.fstat),

@@ -126,6 +126,11 @@ const runListDrop =
 		list.drop(name)
 			.then(_ => ({}))
 			.catch(errorToString)
+const runListDelete =
+	({name, index}: NameIndexParams): Promise<VoidResponse> =>
+		list.remove(name, index)
+			.then(_ => ({}))
+			.catch(errorToString)
 async function runListGet(
 	{name, index}: NameIndexParams
 ): Promise<BytesResponse> {
@@ -214,6 +219,9 @@ export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	}
 	else if ('listDrop' in command) {
 		writer = voidResponseType.encode(await runListDrop(command.listDrop))
+	}
+	else if ('listDelete' in command) {
+		writer = voidResponseType.encode(await runListDelete(command.listDelete))
 	}
 	else if ('listGet' in command) {
 		writer = bytesResponseType.encode(await runListGet(command.listGet))

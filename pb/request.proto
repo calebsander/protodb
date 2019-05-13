@@ -55,7 +55,7 @@ message Command {
 
 		NameParams listCreate = 15;
 		NameParams listDrop = 16;
-		// NameIndexParams listDelete = 17;
+		NameIndexParams listDelete = 17;
 		NameIndexParams listGet = 18;
 		NameIndexValueParams listInsert = 19;
 		NameIndexValueParams listSet = 20;
