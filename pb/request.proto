@@ -60,9 +60,9 @@ message Command {
 		NameIndexValueParams listInsert = 19;
 		NameIndexValueParams listSet = 20;
 		NameParams listSize = 21;
-		// NameRangeParams listIter = 22;
-		// IterParams listIterBreak = 23;
-		// IterParams listIterNext = 24;
+		NameRangeParams listIter = 22;
+		IterParams listIterBreak = 23;
+		IterParams listIterNext = 24;
 	}
 }
 

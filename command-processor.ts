@@ -12,6 +12,7 @@ import {
 	NameIndexValueParams,
 	NameKeyParams,
 	NameKeyValueParams,
+	NameRangeParams,
 	NameValueParams,
 	BytesResponse,
 	ErrorResponse,
@@ -168,6 +169,25 @@ const runListSize =
 		list.size(name)
 			.then(size => ({size}))
 			.catch(errorToString)
+const runListIter =
+	({name, start, end}: NameRangeParams): Promise<IterResponse> =>
+		list.iter(name, start, end)
+			.then(iter => ({iter}))
+			.catch(errorToString)
+function runListIterBreak({iter}: IterParams): VoidResponse {
+	try {
+		list.iterBreak(iter)
+	}
+	catch (e) {
+		return errorToString(e)
+	}
+	return {}
+}
+const runListIterNext =
+	({iter}: IterParams): Promise<OptionalBytesResponse> =>
+		list.iterNext(iter)
+			.then(data => data ? {data} : {})
+			.catch(errorToString)
 
 export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	const command = commandType.toObject(commandType.decode(data), {longs: Number})
@@ -234,6 +254,15 @@ export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	}
 	else if ('listSize' in command) {
 		writer = sizeResponseType.encode(await runListSize(command.listSize))
+	}
+	else if ('listIter' in command) {
+		writer = iterResponseType.encode(await runListIter(command.listIter))
+	}
+	else if ('listIterBreak' in command) {
+		writer = voidResponseType.encode(runListIterBreak(command.listIterBreak))
+	}
+	else if ('listIterNext' in command) {
+		writer = optionalBytesResponseType.encode(await runListIterNext(command.listIterNext))
 	}
 	else {
 		const unreachable: never = command

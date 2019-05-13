@@ -254,6 +254,34 @@ async function processCommands() {
 					responseType = sizeResponseType
 					break
 				}
+				case 'listIter': {
+					const [name, start, end] = args.slice(1) as (string | undefined)[]
+					if (!name) throw new Error(`Syntax: ${type} name [start [end]]`)
+					command = {[type]: {
+						name,
+						start: start === undefined ? start : Number(start),
+						end: end === undefined ? end : Number(end)
+					}}
+					responseType = iterResponseType
+					break
+				}
+				case 'listIterBreak': {
+					const iter: string | undefined = args[1]
+					if (!iter) throw new Error(`Syntax: ${type} iter`)
+					command = {[type]: {iter: fromHexString(iter)}}
+					responseType = voidResponseType
+					break
+				}
+				case 'listIterNext': {
+					const [iter, typeFile] = args.slice(1) as (string | undefined)[]
+					if (!(iter && typeFile)) {
+						throw new Error(`Syntax: ${type} iter typeFile`)
+					}
+					[bytesType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {iter: fromHexString(iter)}}
+					responseType = optionalBytesResponseType
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}

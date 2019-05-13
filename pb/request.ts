@@ -3,8 +3,6 @@ import * as protobuf from 'protobufjs'
 import {Type} from './common'
 import {DB} from './db'
 
-export const ITER_BYTE_LENGTH = 16
-
 const protoFile = protobuf.loadSync(['request.proto', 'db.proto']
 	.map(file => path.join(__dirname, file))
 )
@@ -61,6 +59,9 @@ export type Command
 	| {listInsert: NameIndexValueParams}
 	| {listSet: NameIndexValueParams}
 	| {listSize: NameParams}
+	| {listIter: NameRangeParams}
+	| {listIterBreak: IterParams}
+	| {listIterNext: IterParams}
 export const commandType = protoFile.lookupType('Command') as Type<Command>
 
 export interface ErrorResponse {

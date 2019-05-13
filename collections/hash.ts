@@ -1,6 +1,5 @@
-import {createHash, randomBytes} from 'crypto'
+import {createHash} from 'crypto'
 import * as path from 'path'
-import {promisify} from 'util'
 import {addCollection, dropCollection, getCollections} from '.'
 import {
 	copyWithinFile,
@@ -13,6 +12,7 @@ import {
 	setFileSegment
 } from '../cache'
 import {DATA_DIR} from '../constants'
+import {Iterators} from '../iterator'
 import {
 	Bucket,
 	BucketItem,
@@ -23,13 +23,10 @@ import {
 	Header,
 	headerType
 } from '../pb/hash'
-import {ITER_BYTE_LENGTH} from '../pb/request'
 import {toArrayBuffer} from '../util'
 
 const COLLECTION_TYPE = 'hash'
 const INITIAL_DEPTH = 0
-
-const randomBytesPromise = promisify(randomBytes)
 
 const filename = (name: string, fileType: string) =>
 	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}.${fileType}`)
@@ -114,11 +111,6 @@ async function extendDirectory(name: string, header: Header): Promise<void> {
 	await Promise.all([doubleDirectory, setHeader(name, header)])
 }
 
-interface HashIterator {
-	name: string
-	iterator: AsyncIterator<BucketItem>
-}
-
 async function* hashEntries(name: string): AsyncIterator<BucketItem> {
 	const buckets = await getPageCount(bucketsFilename(name))
 	for (let i = 0; i < buckets; i++) {
@@ -126,30 +118,7 @@ async function* hashEntries(name: string): AsyncIterator<BucketItem> {
 		yield* items
 	}
 }
-
-const iterators = new Map<string, HashIterator>()
-const iteratorCounts = new Map<string, number>()
-
-function checkNoIterators(name: string) {
-	if (iteratorCounts.has(name)) {
-		throw new Error(`Hash ${name} has active iterators`)
-	}
-}
-
-function getIterator(iter: Uint8Array): {key: string, iterator: HashIterator} {
-	const key = Buffer.from(iter).toString('hex')
-	const iterator = iterators.get(key)
-	if (!iterator) throw new Error('Unknown iterator')
-	return {key, iterator}
-}
-
-function iterClose(key: string, name: string): void {
-	iterators.delete(key)
-	const oldCount = iteratorCounts.get(name)
-	if (oldCount === undefined) throw new Error('Hash has no iterators?')
-	if (oldCount > 1) iteratorCounts.set(name, oldCount - 1)
-	else iteratorCounts.delete(name)
-}
+const iterators = new Iterators<AsyncIterator<BucketItem>>()
 
 export async function create(name: string): Promise<void> {
 	await addCollection(name, {[COLLECTION_TYPE]: {}})
@@ -171,7 +140,7 @@ export async function create(name: string): Promise<void> {
 
 export async function drop(name: string): Promise<void> {
 	await checkIsHash(name)
-	checkNoIterators(name)
+	iterators.checkNoIterators(name)
 	await Promise.all([
 		dropCollection(name),
 		removeFile(directoryFilename(name)),
@@ -182,7 +151,7 @@ export async function drop(name: string): Promise<void> {
 // "delete" is a reserved name, so we use "remove" instead
 export async function remove(name: string, key: Uint8Array): Promise<void> {
 	await checkIsHash(name)
-	checkNoIterators(name)
+	iterators.checkNoIterators(name)
 	const header = await getHeader(name)
 	const bucketIndex = depthHash(fullHash(key), header.depth)
 	const bucketPage = await getBucketPage(name, bucketIndex)
@@ -216,7 +185,7 @@ export async function set(
 	name: string, key: Uint8Array, value: Uint8Array
 ): Promise<void> {
 	await checkIsHash(name)
-	checkNoIterators(name)
+	iterators.checkNoIterators(name)
 	const header = await getHeader(name)
 	const hash = fullHash(key)
 	const bucketIndex = depthHash(hash, header.depth)
@@ -294,23 +263,18 @@ export async function size(name: string): Promise<number> {
 
 export async function iter(name: string): Promise<Uint8Array> {
 	await checkIsHash(name)
-	iteratorCounts.set(name, (iteratorCounts.get(name) || 0) + 1)
-	const iter = await randomBytesPromise(ITER_BYTE_LENGTH)
-	const iterKey = iter.toString('hex')
-	iterators.set(iterKey, {name, iterator: hashEntries(name)})
-	return iter
+	return iterators.registerIterator(name, hashEntries(name))
 }
 
 export function iterBreak(iter: Uint8Array): void {
-	const {key, iterator: {name}} = getIterator(iter)
-	iterClose(key, name)
+	iterators.closeIterator(iter)
 }
 
 export async function iterNext(iter: Uint8Array): Promise<BucketItem | null> {
-	const {key, iterator: {iterator, name}} = getIterator(iter)
+	const iterator = iterators.getIterator(iter)
 	const {value, done} = await iterator.next()
 	if (done) {
-		iterClose(key, name)
+		iterators.closeIterator(iter)
 		return null
 	}
 	return value

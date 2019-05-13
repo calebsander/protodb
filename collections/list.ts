@@ -3,6 +3,7 @@ import {Reader} from 'protobufjs'
 import {addCollection, dropCollection, getCollections} from '.'
 import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
 import {DATA_DIR} from '../constants'
+import {Iterators} from '../iterator'
 import {
 	Child,
 	FREE_LIST_END,
@@ -205,6 +206,35 @@ async function tryCoalesce(
 	return true
 }
 
+async function* sublistEntries(
+	name: string, page: number, start?: number, end?: number
+): AsyncIterableIterator<Uint8Array> {
+	const node = await getNode(name, page)
+	if ('inner' in node) {
+		const hasStart = start !== undefined, hasEnd = end !== undefined
+		for (const {page, size} of node.inner.children) {
+			if (hasEnd && end! <= (hasStart ? start! : 0)) break
+
+			yield* sublistEntries(name, page, start, end)
+			if (hasStart) start = Math.max(start! - size, 0)
+			if (hasEnd) end! -= size
+		}
+	}
+	else {
+		const {values} = node.leaf
+		if (end === undefined) end = values.length
+		for (let i = start || 0; i < end; i++) yield values[i]
+	}
+}
+async function* listEntries(
+	name: string, start?: number, end?: number
+): AsyncIterator<Uint8Array> {
+	const {child} = await getHeader(name)
+	yield *sublistEntries(name, child.page, start, end)
+}
+
+const iterators = new Iterators<AsyncIterator<Uint8Array>>()
+
 export async function create(name: string): Promise<void> {
 	await addCollection(name, {[COLLECTION_TYPE]: {}})
 	const file = filename(name)
@@ -227,6 +257,7 @@ export async function drop(name: string): Promise<void> {
 // "delete" is a reserved name, so we use "remove" instead
 export async function remove(name: string, listIndex?: number): Promise<void> {
 	await checkIsList(name)
+	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex)
 	const [{index, node}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
@@ -259,6 +290,7 @@ export async function insert(
 	name: string, listIndex: number | undefined, value: Uint8Array
 ): Promise<void> {
 	await checkIsList(name)
+	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex, true)
 	const [{index, node}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
@@ -317,6 +349,7 @@ export async function set(
 	name: string, listIndex: number, value: Uint8Array
 ): Promise<void> {
 	await checkIsList(name)
+	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex)
 	const [{page, index, node}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
@@ -328,4 +361,25 @@ export async function size(name: string): Promise<number> {
 	await checkIsList(name)
 	const {child: {size}} = await getHeader(name)
 	return size
+}
+
+export async function iter(
+	name: string, start?: number, end?: number
+): Promise<Uint8Array> {
+	await checkIsList(name)
+	return iterators.registerIterator(name, listEntries(name, start, end))
+}
+
+export function iterBreak(iter: Uint8Array): void {
+	iterators.closeIterator(iter)
+}
+
+export async function iterNext(iter: Uint8Array): Promise<Uint8Array | null> {
+	const iterator = iterators.getIterator(iter)
+	const {value, done} = await iterator.next()
+	if (done) {
+		iterators.closeIterator(iter)
+		return null
+	}
+	return value
 }
