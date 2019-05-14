@@ -3,9 +3,7 @@
 A structured byte-buffer database.
 Created as a CS 123 project at Caltech in 2019.
 
-<div style="text-align: center">
-  <img src="icon.svg" />
-</div>
+![icon](icon.svg)
 
 ## Example
 
