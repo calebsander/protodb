@@ -21,17 +21,17 @@ message IterParams {
 }
 message NameIndexParams {
 	string name = 1;
-	int64 index = 2;
+	sint64 index = 2;
 }
 message NameIndexValueParams {
 	string name = 1;
-	int64 index = 2;
+	sint64 index = 2;
 	bytes value = 3;
 }
 message NameRangeParams {
 	string name = 1;
-	int64 start = 2;
-	int64 end = 3;
+	sint64 start = 2;
+	sint64 end = 3;
 }
 
 message Command {
