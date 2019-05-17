@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as net from 'net'
 import {promisify} from 'util'
 import {shutdown} from './cache'
-import {runCommand} from './command-processor'
+import {executeCommand} from './command-processor'
 import {DATA_DIR, PORT} from './constants'
 import {concat} from './util'
 
@@ -36,7 +36,7 @@ async function cleanup(): Promise<void> {
 		connection
 			.on('data', chunk => chunks.push(chunk))
 			.on('end', async () =>
-				connection.end(await runCommand(concat(chunks)))
+				connection.end(await executeCommand(concat(chunks)))
 			)
 	}).listen(PORT)
 	console.log(`Listening on port ${PORT}`)

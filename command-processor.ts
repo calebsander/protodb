@@ -189,7 +189,7 @@ const runListIterNext =
 			.then(data => data ? {data} : {})
 			.catch(errorToString)
 
-export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
+async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	const command = commandType.toObject(commandType.decode(data), {longs: Number})
 	let writer: Writer
 	if ('list' in command) {
@@ -270,4 +270,11 @@ export async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		throw new Error('Unexpected command: ' + inspect(command))
 	}
 	return writer.finish()
+}
+
+let runningCommand = Promise.resolve()
+export function executeCommand(data: Uint8Array): Promise<Uint8Array> {
+	const result = runningCommand.then(_ => runCommand(data))
+	runningCommand = result.then(_ => {})
+	return result
 }
