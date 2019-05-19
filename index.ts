@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import * as fs from 'fs'
 import * as net from 'net'
 import {promisify} from 'util'
@@ -6,12 +8,9 @@ import {shutdown} from './cache'
 import {executeCommand} from './command-processor'
 import {concat} from './util'
 
-async function initDB(): Promise<void> {
-	try {
-		await promisify(fs.mkdir)(dataDir)
-	}
-	catch {} // not a problem if it already exists
-}
+const initDB = (): Promise<void> =>
+	promisify(fs.mkdir)(dataDir)
+		.catch(_ => {}) // not a problem if it already exists
 
 async function cleanup(): Promise<void> {
 	try {

@@ -4,17 +4,19 @@
 	"description": "ProtoDB",
 	"main": "dist/index.js",
 	"scripts": {
-		"build-ts": "tsc && cp pb/*.proto dist/pb",
+		"build-ts": "rm -rf dist && tsc && cp pb/*.proto dist/pb && chmod a+x dist/index.js",
 		"build-napi": "node-gyp configure build && cp build/Release/mmap.node dist/mmap-wrapper.node",
 		"build": "npm run build-ts && npm run build-napi",
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"test": "npm run build && tsc -p test && nyc --reporter=lcov ava dist/test/tests"
 	},
 	"author": "Caleb Sander",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^11.13.0",
 		"@types/yargs": "^13.0.0",
+		"ava": "^1.4.1",
 		"node-gyp": "^4.0.0",
+		"nyc": "^14.1.1",
 		"typescript": "^3.4.2"
 	},
 	"dependencies": {
