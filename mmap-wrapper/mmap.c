@@ -189,7 +189,7 @@ napi_value mmap_wrapper(napi_env env, napi_callback_info info) {
 napi_value init(napi_env env, napi_value exports) {
 	// Fetch the page size and its base-2 log
 	// Export "LOG_PAGE_SIZE" and "PAGE_SIZE"
-	PAGE_SIZE = sysconf(_SC_PAGESIZE);
+	PAGE_SIZE = getpagesize();
 	napi_value log_page_size;
 	napi_status status =
 		napi_create_uint32(env, __builtin_ctz(PAGE_SIZE), &log_page_size);
