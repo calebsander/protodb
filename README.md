@@ -1,5 +1,7 @@
 # protoDB
 
+[![Build Status](https://travis-ci.org/calebsander/protodb.svg?branch=master)](https://travis-ci.org/calebsander/protodb)
+
 A structured byte-buffer database.
 Created as a CS 123 project at Caltech in 2019.
 
