@@ -1,6 +1,6 @@
 import {ChildProcess, exec, spawn} from 'child_process'
-import * as net from 'net'
-import * as readline from 'readline'
+import net from 'net'
+import readline from 'readline'
 import {promisify} from 'util'
 import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'

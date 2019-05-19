@@ -1,4 +1,4 @@
-import * as path from 'path'
+import path from 'path'
 import {dataDir} from '../args'
 import {getFile, setFile} from '../cache'
 import {CollectionType, Collections, dbType} from '../pb/db'

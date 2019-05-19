@@ -1,4 +1,4 @@
-import * as protobuf from 'protobufjs'
+import protobuf from 'protobufjs'
 
 export interface Type<T extends object> extends protobuf.Type {
 	decode(reader: Uint8Array, length?: number): protobuf.Message<T>

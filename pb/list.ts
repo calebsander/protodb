@@ -1,5 +1,5 @@
-import * as path from 'path'
-import * as protobuf from 'protobufjs'
+import path from 'path'
+import protobuf from 'protobufjs'
 import {Type} from './common'
 
 const protoFile = protobuf.loadSync(path.join(__dirname, 'list.proto'))

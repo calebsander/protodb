@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import * as fs from 'fs'
-import * as net from 'net'
+import fs from 'fs'
+import net from 'net'
 import {promisify} from 'util'
 import {dataDir, port} from './args'
 import {shutdown} from './cache'
