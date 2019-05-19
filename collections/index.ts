@@ -1,9 +1,9 @@
 import * as path from 'path'
-import {DATA_DIR} from '../constants'
+import {dataDir} from '../args'
 import {getFile, setFile} from '../cache'
 import {CollectionType, Collections, dbType} from '../pb/db'
 
-const DB_FILE = path.join(DATA_DIR, 'db')
+const DB_FILE = path.join(dataDir, 'db')
 
 export const getCollections = getFile(DB_FILE)
 	.then(contents => {

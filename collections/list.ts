@@ -1,8 +1,8 @@
 import * as path from 'path'
 import {Reader} from 'protobufjs'
 import {addCollection, dropCollection, getCollections} from '.'
+import {dataDir} from '../args'
 import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
-import {DATA_DIR} from '../constants'
 import {Iterators} from '../iterator'
 import {
 	Child,
@@ -20,7 +20,7 @@ const INITIAL_ROOT_PAGE = 1
 const MIN_NODE_LENGTH = Math.floor(PAGE_SIZE * 0.4)
 
 const filename = (name: string) =>
-	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}`)
+	path.join(dataDir, `${name}.${COLLECTION_TYPE}`)
 
 async function checkIsList(name: string): Promise<void> {
 	const collections = await getCollections

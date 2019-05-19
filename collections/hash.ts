@@ -1,6 +1,7 @@
 import {createHash} from 'crypto'
 import * as path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
+import {dataDir} from '../args'
 import {
 	copyWithinFile,
 	createFile,
@@ -11,7 +12,6 @@ import {
 	setPageCount,
 	setFileSegment
 } from '../cache'
-import {DATA_DIR} from '../constants'
 import {Iterators} from '../iterator'
 import {
 	Bucket,
@@ -29,7 +29,7 @@ const COLLECTION_TYPE = 'hash'
 const INITIAL_DEPTH = 0
 
 const filename = (name: string, fileType: string) =>
-	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}.${fileType}`)
+	path.join(dataDir, `${name}.${COLLECTION_TYPE}.${fileType}`)
 const directoryFilename = (name: string) => filename(name, 'directory')
 const bucketsFilename = (name: string) => filename(name, 'buckets')
 

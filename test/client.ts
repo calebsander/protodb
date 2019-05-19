@@ -2,7 +2,8 @@ import * as net from 'net'
 import * as readline from 'readline'
 import {inspect} from 'util'
 import * as protobuf from 'protobufjs'
-import {PORT} from '../constants'
+import yargs from 'yargs'
+import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'
 import {
 	Command,
@@ -19,6 +20,14 @@ import {
 	voidResponseType
 } from '../pb/request'
 import {concat} from '../util'
+
+const {port} = yargs.options({
+	port: {
+		default: DEFAULT_PORT,
+		number: true,
+		describe: 'Port that protoDB is listening on'
+	}
+}).argv
 
 const toHexString = (bytes: Uint8Array): string =>
 	[...bytes].map(b => (b < 16 ? '0' : '') + b.toString(16)).join('')
@@ -291,7 +300,7 @@ async function processCommands() {
 			continue
 		}
 
-		const client: net.Socket = net.createConnection(PORT)
+		const client: net.Socket = net.createConnection(port)
 			.on('connect', () => client.end(commandType.encode(command).finish()))
 		const response = await new Promise((resolve, reject) => {
 			const responseChunks: Buffer[] = []

@@ -1,13 +1,13 @@
 import * as path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
+import {dataDir} from '../args'
 import {getFile, removeFile, setFile} from '../cache'
-import {DATA_DIR} from '../constants'
 import {itemType} from '../pb/item'
 
 const COLLECTION_TYPE = 'item'
 
 const filename = (name: string) =>
-	path.join(DATA_DIR, `${name}.${COLLECTION_TYPE}`)
+	path.join(dataDir, `${name}.${COLLECTION_TYPE}`)
 
 async function checkIsItem(name: string): Promise<void> {
 	const collections = await getCollections

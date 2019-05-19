@@ -1,14 +1,14 @@
 import * as fs from 'fs'
 import * as net from 'net'
 import {promisify} from 'util'
+import {dataDir, port} from './args'
 import {shutdown} from './cache'
 import {executeCommand} from './command-processor'
-import {DATA_DIR, PORT} from './constants'
 import {concat} from './util'
 
 async function initDB(): Promise<void> {
 	try {
-		await promisify(fs.mkdir)(DATA_DIR)
+		await promisify(fs.mkdir)(dataDir)
 	}
 	catch {} // not a problem if it already exists
 }
@@ -38,6 +38,6 @@ async function cleanup(): Promise<void> {
 			.on('end', async () =>
 				connection.end(await executeCommand(concat(chunks)))
 			)
-	}).listen(PORT)
-	console.log(`Listening on port ${PORT}`)
+	}).listen(port)
+	console.log(`Listening on port ${port}`)
 })()
