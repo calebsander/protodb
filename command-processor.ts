@@ -186,7 +186,7 @@ function runListIterBreak({iter}: IterParams): VoidResponse {
 const runListIterNext =
 	({iter}: IterParams): Promise<OptionalBytesResponse> =>
 		list.iterNext(iter)
-			.then(data => data ? {data} : {})
+			.then(data => data ? {data} : {none: {}})
 			.catch(errorToString)
 
 async function runCommand(data: Uint8Array): Promise<Uint8Array> {

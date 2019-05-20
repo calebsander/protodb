@@ -68,7 +68,7 @@ export interface ErrorResponse {
 	error: string
 }
 
-export type BytesResponse = ErrorResponse | {data?: Uint8Array}
+export type BytesResponse = ErrorResponse | {data: Uint8Array}
 export const bytesResponseType =
 	protoFile.lookupType('BytesResponse') as Type<BytesResponse>
 
