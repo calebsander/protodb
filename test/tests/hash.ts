@@ -229,4 +229,52 @@ export default (test: TestInterface<TestContext>) => {
 			t.deepEqual(result, {error: 'Error: Unknown iterator'})
 		}
 	})
+
+	test('hash-check', async t => {
+		const listName = 'lst', undefinedName = 'dne'
+		let result = await t.context.sendCommand(
+			{listCreate: {name: listName}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+
+		await Promise.all([listName, undefinedName].map(name => {
+			const errorResult = {error: `Error: Collection ${name} is not a hash`}
+			return Promise.all([
+				t.context.sendCommand({hashDrop: {name}}, voidResponseType)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{hashDelete: {name, key: new Uint8Array}},
+					voidResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{hashGet: {name, key: new Uint8Array}},
+					optionalBytesResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{hashSet: {name, key: new Uint8Array, value: new Uint8Array}},
+					voidResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand({hashSize: {name}}, sizeResponseType)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand({hashIter: {name}}, iterResponseType)
+					.then(result => t.deepEqual(result, errorResult))
+			])
+		}))
+
+		result = await t.context.sendCommand(
+			{hashCreate: {name: listName}},
+			voidResponseType
+		)
+		t.deepEqual(result, {error: `Error: Collection ${listName} already exists`})
+
+		const name = 'already_created'
+		result = await t.context.sendCommand({hashCreate: {name}}, voidResponseType)
+		t.deepEqual(result, {})
+		result = await t.context.sendCommand({hashCreate: {name}}, voidResponseType)
+		t.deepEqual(result, {error: `Error: Collection ${name} already exists`})
+	})
 }
