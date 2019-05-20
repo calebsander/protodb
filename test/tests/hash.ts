@@ -278,7 +278,7 @@ export default (test: TestInterface<TestContext>) => {
 		t.deepEqual(result, {error: `Error: Collection ${name} already exists`})
 	})
 
-	test.failing('hash-split-stress', async t => {
+	test('hash-split-stress', async t => {
 		const name = 'bigg'
 		const result = await t.context.sendCommand(
 			{hashCreate: {name}},
@@ -286,10 +286,10 @@ export default (test: TestInterface<TestContext>) => {
 		)
 		t.deepEqual(result, {})
 
-		const value = new Uint8Array(3000)
+		const value = (key: number) => new Uint8Array(3000).fill(key)
 		for (let i = 0; i < 256; i++) {
 			const result = await t.context.sendCommand(
-				{hashSet: {name, key: new Uint8Array([i]), value}},
+				{hashSet: {name, key: new Uint8Array([i]), value: value(i)}},
 				voidResponseType
 			)
 			t.deepEqual(result, {})
@@ -300,7 +300,7 @@ export default (test: TestInterface<TestContext>) => {
 				{hashGet: {name, key: new Uint8Array([i])}},
 				optionalBytesResponseType
 			)
-			t.deepEqual(result, {data: value})
+			t.deepEqual(result, {data: value(i)})
 		}
 		{
 			const result = await t.context.sendCommand(

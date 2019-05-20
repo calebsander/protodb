@@ -111,6 +111,79 @@ async function extendDirectory(name: string, header: Header): Promise<void> {
 	await Promise.all([doubleDirectory, setHeader(name, header)])
 }
 
+function ensureOverflowError(e: Error) {
+	if (!(e instanceof RangeError && e.message === 'Source is too large')) {
+		throw e // unexpected error; rethrow it
+	}
+}
+
+async function splitBucket(
+	name: string,
+	index: number,
+	bucketPage: number,
+	{depth, items}: Bucket,
+	header: Header
+) {
+	// Copy the keys and values because they are slices of the old page,
+	// which will be overwritten
+	for (const item of items) {
+		item.key = item.key.slice()
+		item.value = item.value.slice()
+	}
+	let splitAgain = true
+	while (splitAgain) {
+		// Grow directory if necessary
+		if (depth === header.depth) await extendDirectory(name, header)
+
+		// Split bucket
+		const index1 = index | 1 << depth++
+		const items0: BucketItem[] = [],
+		      items1: BucketItem[] = []
+		for (const item of items) {
+			(depthHash(fullHash(item.key), depth) === index ? items0 : items1)
+				.push(item)
+		}
+		splitAgain = false
+		const makeNewBucket = async() => {
+			// Add a page for the bucket to the end of the bucket file
+			const newBucketPage = await getPageCount(bucketsFilename(name))
+			const updatePromises = [
+				addBucket(name, newBucketPage, {depth, items: items1})
+					.catch(e => {
+						ensureOverflowError(e)
+						if (splitAgain) throw new Error('Both buckets overflowed?')
+						splitAgain = true
+						index = index1
+						bucketPage = newBucketPage
+						items = items1
+					})
+			]
+			// Update the 2 ** (header.depth - depth) bucket indices
+			// that now point to the new bucket
+			const bucketRepeatInterval = 1 << depth
+			const maxBucketIndex = 1 << header.depth
+			for (
+				let bucket1 = index1;
+				bucket1 < maxBucketIndex;
+				bucket1 += bucketRepeatInterval
+			) {
+				updatePromises.push(setBucketPage(name, bucket1, newBucketPage))
+			}
+			await Promise.all(updatePromises)
+		}
+		await Promise.all([
+			setBucket(name, bucketPage, {depth, items: items0})
+				.catch(e => {
+					ensureOverflowError(e)
+					if (splitAgain) throw new Error('Both buckets overflowed?')
+					splitAgain = true
+					items = items0
+				}),
+			makeNewBucket()
+		])
+	}
+}
+
 async function* hashEntries(name: string): AsyncIterator<BucketItem> {
 	const buckets = await getPageCount(bucketsFilename(name))
 	for (let i = 0; i < buckets; i++) {
@@ -206,52 +279,14 @@ export async function set(
 		await setHeader(name, header)
 	}
 
-	// TODO: what if hash needs to be resized multiple times in a row?
-	// (This is very unlikely if each bucket stores ~100 items)
 	try {
 		await setBucket(name, bucketPage, bucket)
 	}
-	catch (e) {
-		// Bucket is full
-		if (!(e instanceof RangeError && e.message === 'Source is too large')) {
-			throw e // unexpected error; rethrow it
-		}
-
-		// Grow directory if necessary
-		const oldDepth = bucket.depth
-		if (oldDepth === header.depth) await extendDirectory(name, header)
-
-		// Split bucket
-		const newDepth = oldDepth + 1
-		const items0: BucketItem[] = [],
-		      items1: BucketItem[] = []
-		for (const item of items) {
-			const hash = fullHash(item.key)
-			const newItems = depthHash(hash, oldDepth) === depthHash(hash, newDepth)
-				? items0
-				: items1
-			newItems.push(item)
-		}
-		// Add a page for the bucket to the end of the bucket file
-		const newBucketPage = await getPageCount(bucketsFilename(name))
-		const updatePromises = [(async () => {
-			await addBucket(name, newBucketPage, {depth: newDepth, items: items1})
-			// Need to wait to overwrite the old bucket until the new bucket is written
-			// because the items are slices of the old page
-			await setBucket(name, bucketPage, {depth: newDepth, items: items0})
-		})()]
-		// Update the 2 ** (header.depth - newDepth) bucket indices
-		// that now point to the new bucket
-		const bucketRepeatInterval = 1 << newDepth
-		const maxBucketIndex = 1 << header.depth
-		for (
-			let bucket1 = depthHash(hash, oldDepth) | 1 << oldDepth;
-			bucket1 < maxBucketIndex;
-			bucket1 += bucketRepeatInterval
-		) {
-			updatePromises.push(setBucketPage(name, bucket1, newBucketPage))
-		}
-		await Promise.all(updatePromises)
+	catch (e) { // bucket is full
+		ensureOverflowError(e)
+		await splitBucket(
+			name, depthHash(hash, bucket.depth), bucketPage, bucket, header
+		)
 	}
 }
 
