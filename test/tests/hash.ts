@@ -140,14 +140,14 @@ export default (test: TestInterface<TestContext>) => {
 				{hashIter: {name}},
 				iterResponseType
 			)
-			if ('error' in result) throw new Error('Iter failed')
+			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
 			iter1 = result.iter
 
 			result = await t.context.sendCommand(
 				{hashIter: {name}},
 				iterResponseType
 			)
-			if ('error' in result) throw new Error('Iter failed')
+			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
 			iter2 = result.iter
 		}
 
