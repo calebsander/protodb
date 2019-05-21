@@ -300,7 +300,7 @@ async function processCommands() {
 			continue
 		}
 
-		const client: net.Socket = net.createConnection(port)
+		const client: net.Socket = net.connect(port)
 			.on('connect', () => client.end(commandType.encode(command).finish()))
 		const response = await new Promise((resolve, reject) => {
 			const responseChunks: Buffer[] = []

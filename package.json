@@ -7,7 +7,7 @@
 		"build-ts": "rm -rf dist && tsc && cp pb/*.proto dist/pb && chmod a+x dist/index.js",
 		"build-napi": "node-gyp configure build && cp build/Release/mmap.node dist/mmap-wrapper.node",
 		"build": "npm run build-ts && npm run build-napi",
-		"test": "npm run build && tsc -p test && nyc --reporter=lcov ava -s dist/test/main.js"
+		"test": "npm run build && tsc -p test && nyc --reporter=lcov ava dist/test/main.js"
 	},
 	"author": "Caleb Sander",
 	"license": "MIT",
