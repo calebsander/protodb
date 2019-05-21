@@ -205,7 +205,7 @@ async function processCommands() {
 					if (!name) throw new Error(`Syntax: ${type} name [index]`)
 					command = {[type]: {
 						name,
-						index: index === undefined ? index : Number(index)
+						index: index === undefined ? {none: {}} : {value: Number(index)}
 					}}
 					responseType = voidResponseType
 					break
@@ -236,7 +236,7 @@ async function processCommands() {
 					const [valueType] = await lookupType(typeFile, 'Type')
 					command = {[type]: {
 						name,
-						index: index === undefined ? index : Number(index),
+						index: index === undefined ? {none: {}} : {value: Number(index)},
 						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
 					}}
 					responseType = voidResponseType
@@ -268,8 +268,8 @@ async function processCommands() {
 					if (!name) throw new Error(`Syntax: ${type} name [start [end]]`)
 					command = {[type]: {
 						name,
-						start: start === undefined ? start : Number(start),
-						end: end === undefined ? end : Number(end)
+						start: start === undefined ? {none: {}} : {value: Number(start)},
+						end: end === undefined ? {none: {}} : {value: Number(end)}
 					}}
 					responseType = iterResponseType
 					break

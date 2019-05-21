@@ -7,32 +7,38 @@ const protoFile = protobuf.loadSync(['request.proto', 'db.proto']
 	.map(file => path.join(__dirname, file))
 )
 
-// These Uint8Arrays are optional because they may be empty:
-// see https://github.com/protobufjs/protobuf.js/issues/1218
+export type OptionalIndex = {none: {}} | {value: number}
+
 export interface NameParams {
 	name: string
 }
 export interface NameValueParams extends NameParams {
-	value?: Uint8Array
+	value: Uint8Array
 }
 export interface NameKeyParams extends NameParams {
-	key?: Uint8Array
+	key: Uint8Array
 }
 export interface NameKeyValueParams extends NameKeyParams {
-	value?: Uint8Array
+	value: Uint8Array
 }
 export interface IterParams {
 	iter: Uint8Array
 }
 export interface NameIndexParams extends NameParams {
-	index?: number
+	index: number
+}
+export interface NameOptionalIndexParams extends NameParams {
+	index: OptionalIndex
 }
 export interface NameIndexValueParams extends NameIndexParams {
-	value?: Uint8Array
+	value: Uint8Array
+}
+export interface NameOptionalIndexValueParams extends NameOptionalIndexParams {
+	value: Uint8Array
 }
 export interface NameRangeParams extends NameParams {
-	start?: number
-	end?: number
+	start: OptionalIndex
+	end: OptionalIndex
 }
 export type Command
 	= {list: {}}
@@ -54,9 +60,9 @@ export type Command
 
 	| {listCreate: NameParams}
 	| {listDrop: NameParams}
-	| {listDelete: NameIndexParams}
+	| {listDelete: NameOptionalIndexParams}
 	| {listGet: NameIndexParams}
-	| {listInsert: NameIndexValueParams}
+	| {listInsert: NameOptionalIndexValueParams}
 	| {listSet: NameIndexValueParams}
 	| {listSize: NameParams}
 	| {listIter: NameRangeParams}

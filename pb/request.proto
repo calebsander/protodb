@@ -1,5 +1,12 @@
 syntax = "proto3";
 
+message OptionalIndex {
+	oneof index {
+		EmptyType none = 1;
+		sint64 value = 2;
+	}
+}
+
 message NameParams {
 	string name = 1;
 }
@@ -23,15 +30,24 @@ message NameIndexParams {
 	string name = 1;
 	sint64 index = 2;
 }
+message NameOptionalIndexParams {
+	string name = 1;
+	OptionalIndex index = 2;
+}
 message NameIndexValueParams {
 	string name = 1;
 	sint64 index = 2;
 	bytes value = 3;
 }
+message NameOptionalIndexValueParams {
+	string name = 1;
+	OptionalIndex index = 2;
+	bytes value = 3;
+}
 message NameRangeParams {
 	string name = 1;
-	sint64 start = 2;
-	sint64 end = 3;
+	OptionalIndex start = 2;
+	OptionalIndex end = 3;
 }
 
 message Command {
@@ -55,9 +71,9 @@ message Command {
 
 		NameParams listCreate = 15;
 		NameParams listDrop = 16;
-		NameIndexParams listDelete = 17;
+		NameOptionalIndexParams listDelete = 17;
 		NameIndexParams listGet = 18;
-		NameIndexValueParams listInsert = 19;
+		NameOptionalIndexValueParams listInsert = 19;
 		NameIndexValueParams listSet = 20;
 		NameParams listSize = 21;
 		NameRangeParams listIter = 22;

@@ -12,8 +12,11 @@ import {
 	NameIndexValueParams,
 	NameKeyParams,
 	NameKeyValueParams,
+	NameOptionalIndexParams,
+	NameOptionalIndexValueParams,
 	NameRangeParams,
 	NameValueParams,
+	OptionalIndex,
 	BytesResponse,
 	ErrorResponse,
 	IterResponse,
@@ -37,6 +40,9 @@ function errorToString(err: Error): ErrorResponse {
 	const {name, message} = err
 	return {error: `${name}: ${message}`}
 }
+
+const getIndex = (index: OptionalIndex) =>
+	'none' in index ? undefined : index.value
 
 async function runList(): Promise<ListResponse> {
 	let collections: Collections
@@ -65,7 +71,7 @@ const runItemGet =
 			.catch(errorToString)
 const runItemSet =
 	({name, value}: NameValueParams): Promise<VoidResponse> =>
-		item.set(name, value || new Uint8Array)
+		item.set(name, value)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashCreate =
@@ -80,17 +86,17 @@ const runHashDrop =
 			.catch(errorToString)
 const runHashDelete =
 	({name, key}: NameKeyParams): Promise<VoidResponse> =>
-		hash.remove(name, key || new Uint8Array)
+		hash.remove(name, key)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashGet =
 	({name, key}: NameKeyParams): Promise<OptionalBytesResponse> =>
-		hash.get(name, key || new Uint8Array)
+		hash.get(name, key)
 			.then<OptionalBytesResponse>(data => data ? {data} : {none: {}})
 			.catch(errorToString)
 const runHashSet =
 	({name, key, value}: NameKeyValueParams): Promise<VoidResponse> =>
-		hash.set(name, key || new Uint8Array, value || new Uint8Array)
+		hash.set(name, key, value)
 			.then(_ => ({}))
 			.catch(errorToString)
 const runHashSize =
@@ -128,15 +134,13 @@ const runListDrop =
 			.then(_ => ({}))
 			.catch(errorToString)
 const runListDelete =
-	({name, index}: NameIndexParams): Promise<VoidResponse> =>
-		list.remove(name, index)
+	({name, index}: NameOptionalIndexParams): Promise<VoidResponse> =>
+		list.remove(name, getIndex(index))
 			.then(_ => ({}))
 			.catch(errorToString)
 async function runListGet(
 	{name, index}: NameIndexParams
 ): Promise<BytesResponse> {
-	if (index === undefined) throw new Error('Missing index')
-
 	let data: Uint8Array
 	try {
 		data = await list.get(name, index)
@@ -147,17 +151,15 @@ async function runListGet(
 	return {data}
 }
 const runListInsert =
-	({name, index, value}: NameIndexValueParams): Promise<VoidResponse> =>
-		list.insert(name, index, value || new Uint8Array)
+	({name, index, value}: NameOptionalIndexValueParams): Promise<VoidResponse> =>
+		list.insert(name, getIndex(index), value)
 			.then(_ => ({}))
 			.catch(errorToString)
 async function runListSet(
 	{name, index, value}: NameIndexValueParams
 ): Promise<VoidResponse> {
-	if (index === undefined) throw new Error('Missing index')
-
 	try {
-		await list.set(name, index, value || new Uint8Array)
+		await list.set(name, index, value)
 	}
 	catch (e) {
 		return errorToString(e)
@@ -171,7 +173,7 @@ const runListSize =
 			.catch(errorToString)
 const runListIter =
 	({name, start, end}: NameRangeParams): Promise<IterResponse> =>
-		list.iter(name, start, end)
+		list.iter(name, getIndex(start), getIndex(end))
 			.then(iter => ({iter}))
 			.catch(errorToString)
 function runListIterBreak({iter}: IterParams): VoidResponse {
@@ -190,7 +192,10 @@ const runListIterNext =
 			.catch(errorToString)
 
 async function runCommand(data: Uint8Array): Promise<Uint8Array> {
-	const command = commandType.toObject(commandType.decode(data), {longs: Number})
+	const command = commandType.toObject(
+		commandType.decode(data),
+		{longs: Number, defaults: true}
+	)
 	let writer: Writer
 	if ('list' in command) {
 		writer = listResponseType.encode(await runList())
