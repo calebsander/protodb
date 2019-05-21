@@ -122,7 +122,7 @@ export default (test: TestInterface<TestContext>) => {
 		)
 		t.deepEqual(result, {})
 
-		await Promise.all(new Array(1e3).fill(0).map(async (_, key) => {
+		for (let key = 0; key < 1e3; key++) {
 			const result = await t.context.sendCommand(
 				{hashSet: {
 					name,
@@ -132,7 +132,7 @@ export default (test: TestInterface<TestContext>) => {
 				voidResponseType
 			)
 			t.deepEqual(result, {})
-		}))
+		}
 		{
 			const result = await t.context.sendCommand(
 				{hashSize: {name}},
@@ -141,7 +141,7 @@ export default (test: TestInterface<TestContext>) => {
 			t.deepEqual(result, {size: 1e3})
 		}
 
-		await Promise.all(new Array(1e3).fill(0).map(async (_, key) => {
+		for (let key = 0; key < 1e3; key++) {
 			const result = await t.context.sendCommand(
 				{hashSet: {
 					name,
@@ -151,7 +151,7 @@ export default (test: TestInterface<TestContext>) => {
 				voidResponseType
 			)
 			t.deepEqual(result, {})
-		}))
+		}
 		{
 			const result = await t.context.sendCommand(
 				{hashSize: {name}},
@@ -159,7 +159,7 @@ export default (test: TestInterface<TestContext>) => {
 			)
 			t.deepEqual(result, {size: 1500})
 		}
-		await Promise.all(new Array(2e3).fill(0).map(async (_, key) => {
+		for (let key = 0; key < 2e3; key++) {
 			const result = await t.context.sendCommand(
 				{hashGet: {name, key: new Uint8Array(new Int32Array([key]).buffer)}},
 				optionalBytesResponseType
@@ -170,7 +170,7 @@ export default (test: TestInterface<TestContext>) => {
 					? key < 1e3 ? {data: new Uint8Array(key).fill(key)} : {none: {}}
 					: {data: new Uint8Array(key >> 1).fill(key >> 1)}
 			)
-		}))
+		}
 	})
 
 	test('hash-iter', async t => {
