@@ -114,6 +114,65 @@ export default (test: TestInterface<TestContext>) => {
 		}
 	})
 
+	test('hash-overwrite', async t => {
+		const name = 'h'
+		const result = await t.context.sendCommand(
+			{hashCreate: {name}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+
+		await Promise.all(new Array(1e3).fill(0).map(async (_, key) => {
+			const result = await t.context.sendCommand(
+				{hashSet: {
+					name,
+					key: new Uint8Array(new Int32Array([key]).buffer),
+					value: new Uint8Array(key).fill(key)}
+				},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+		}))
+		{
+			const result = await t.context.sendCommand(
+				{hashSize: {name}},
+				sizeResponseType
+			)
+			t.deepEqual(result, {size: 1e3})
+		}
+
+		await Promise.all(new Array(1e3).fill(0).map(async (_, key) => {
+			const result = await t.context.sendCommand(
+				{hashSet: {
+					name,
+					key: new Uint8Array(new Int32Array([key << 1]).buffer),
+					value: new Uint8Array(key).fill(key)}
+				},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+		}))
+		{
+			const result = await t.context.sendCommand(
+				{hashSize: {name}},
+				sizeResponseType
+			)
+			t.deepEqual(result, {size: 1500})
+		}
+		await Promise.all(new Array(2e3).fill(0).map(async (_, key) => {
+			const result = await t.context.sendCommand(
+				{hashGet: {name, key: new Uint8Array(new Int32Array([key]).buffer)}},
+				optionalBytesResponseType
+			)
+			t.deepEqual(
+				result,
+				key & 1
+					? key < 1e3 ? {data: new Uint8Array(key).fill(key)} : {none: {}}
+					: {data: new Uint8Array(key >> 1).fill(key >> 1)}
+			)
+		}))
+	})
+
 	test('hash-iter', async t => {
 		const name = 'iterable'
 		let result = await t.context.sendCommand(
