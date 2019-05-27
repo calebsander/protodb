@@ -159,6 +159,7 @@ async function tryCoalesce(
 	const lengths = await Promise.all(siblings.map(
 		({sibling}) => getNodeLength(name, sibling.page)
 	))
+	// TODO: should try to coalesce with other sibling afterwards
 	let coalesceSibling: Sibling | undefined
 	let maxSiblingLength = 0
 	lengths.forEach((length, i) => {
