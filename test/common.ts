@@ -1,5 +1,6 @@
 import {ChildProcess, exec, spawn} from 'child_process'
 import net from 'net'
+import path from 'path'
 import readline from 'readline'
 import {promisify} from 'util'
 import {DEFAULT_PORT} from '../constants'
@@ -61,5 +62,8 @@ export class TestContext {
 		this.db.kill()
 		await this.closed
 		await execPromise(`rm -rf ${this.dataDir}`)
+	}
+	getFile(filename: string): string {
+		return path.join(this.dataDir, filename)
 	}
 }

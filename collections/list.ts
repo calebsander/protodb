@@ -5,7 +5,6 @@ import {dataDir} from '../args'
 import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
 import {Iterators} from '../iterator'
 import {
-	Child,
 	FREE_LIST_END,
 	freePageType,
 	Header,
@@ -17,7 +16,7 @@ import {
 const COLLECTION_TYPE = 'list'
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
-const MIN_NODE_LENGTH = Math.floor(PAGE_SIZE * 0.4)
+const MIN_NODE_LENGTH = PAGE_SIZE >> 1
 
 const filename = (name: string) =>
 	path.join(dataDir, `${name}.${COLLECTION_TYPE}`)
@@ -55,9 +54,10 @@ const getNode = (name: string, page: number): Promise<Node> =>
 		)
 	)
 const getNodeLength = (name: string, page: number): Promise<number> =>
-	new FilePage(filename(name), page).use(async page =>
-		new Reader(new Uint8Array(page)).uint32()
-	)
+	new FilePage(filename(name), page).use(async page => {
+		const reader = new Reader(new Uint8Array(page))
+		return reader.uint32() + reader.pos
+	})
 const setNode = (name: string, page: number, node: Node): Promise<void> =>
 	new FilePage(filename(name), page).use(async page =>
 		new Uint8Array(page).set(nodeType.encodeDelimited(node).finish())
@@ -137,11 +137,6 @@ function getParent(path: PathItem[]) {
 	return {children, index}
 }
 
-interface Sibling {
-	left: boolean
-	siblingIndex: number
-	sibling: Child
-}
 async function tryCoalesce(
 	name: string, node: Node, path: PathItem[], header: Header
 ): Promise<boolean> {
@@ -149,49 +144,73 @@ async function tryCoalesce(
 	if (!parent) return false // root node can't be coalesced
 	const {len} = nodeType.encodeDelimited(node)
 	if (len >= MIN_NODE_LENGTH) return false // ensure node is sufficiently empty
+
 	const {children, index} = parent
-	const siblings = [true, false]
-		.map(left => {
-			const siblingIndex = left ? index - 1 : index + 1
-			return {left, siblingIndex, sibling: children[siblingIndex]}
-		})
-		.filter(({sibling}) => sibling) // skip siblings that don't exist
-	const lengths = await Promise.all(siblings.map(
-		({sibling}) => getNodeLength(name, sibling.page)
-	))
-	// TODO: should try to coalesce with other sibling afterwards
-	let coalesceSibling: Sibling | undefined
-	let maxSiblingLength = 0
-	lengths.forEach((length, i) => {
-		if (length < MIN_NODE_LENGTH && length > maxSiblingLength) {
-			coalesceSibling = siblings[i]
-			maxSiblingLength = length
-		}
-	})
-	if (!coalesceSibling) return false // node must have a sibling with free space
-
-	// Coalesce with selected sibling
-	const {left, siblingIndex, sibling: {page: siblingPage}} = coalesceSibling
-	const siblingNode = await getNode(name, siblingPage)
-	if ('inner' in node) {
-		if ('leaf' in siblingNode) throw new Error('Invalid sibling')
-		concat(node.inner.children, siblingNode.inner.children, left)
-	}
-	else {
-		if ('inner' in siblingNode) throw new Error('Invalid sibling')
-		concat(node.leaf.values, siblingNode.leaf.values, left)
-	}
 	const thisChild = children[index]
-	const promises = [(async () => {
-		await setNode(name, thisChild.page, node)
-		// Must wait to overwrite sibling until new page has been written since
-		// leaf values are slices of the sibling page
-		await addFreePage(name, header, siblingPage)
-	})()]
+	const siblingLengths = await Promise.all(
+		[true, false]
+			.map(left => {
+				const siblingIndex = left ? index - 1 : index + 1
+				return {left, siblingIndex, sibling: children[siblingIndex]}
+			})
+			.filter(({sibling}) => sibling) // skip siblings that don't exist
+			.map(async sibling => {
+				const length = await getNodeLength(name, sibling.sibling.page)
+				return {sibling, length}
+			})
+	)
+	// Coalescing is only possible with less than half-full siblings
+	const coalesceCandidates =
+		siblingLengths.filter(({length}) => length < MIN_NODE_LENGTH)
+	if (!coalesceCandidates.length) return false
 
-	// Update parent
+	const newFreePages: number[] = []
+	while (true) {
+		// Choose the smaller of the candidate siblings to coalesce with
+		let coalesceSibling: number | undefined
+		let minSiblingLength = Infinity
+		coalesceCandidates.forEach(({length}, i) => {
+			if (length < minSiblingLength) {
+				coalesceSibling = i
+				minSiblingLength = length
+			}
+		})
+
+		// Coalesce with selected sibling
+		const [{sibling}] = coalesceCandidates.splice(coalesceSibling!, 1)
+		const {left, siblingIndex, sibling: {page: siblingPage}} = sibling
+		const siblingNode = await getNode(name, siblingPage)
+		if ('inner' in node) {
+			if ('leaf' in siblingNode) throw new Error('Invalid sibling?')
+			concat(node.inner.children, siblingNode.inner.children, left)
+		}
+		else {
+			if ('inner' in siblingNode) throw new Error('Invalid sibling?')
+			// Copy sibling's values because they are slices of its page,
+			// which will be overwritten when it gets added to the free list
+			concat(
+				node.leaf.values,
+				siblingNode.leaf.values.map(value => value.slice()),
+				left
+			)
+		}
+		newFreePages.push(siblingPage)
+
+		// Remove sibling from parent
+		children.splice(siblingIndex, 1)
+
+		// See if it is possible to coalesce with the other sibling
+		const coalesceAgain = coalesceCandidates.length &&
+			nodeType.encodeDelimited(node).len < MIN_NODE_LENGTH
+		if (coalesceAgain) {
+			// The index of the right sibling goes down if the left sibling is removed
+			if (left) coalesceCandidates[0].sibling.siblingIndex--
+		}
+		else break
+	}
+
+	// Update sublist's size
 	thisChild.size = nodeSize(node)
-	children.splice(siblingIndex, 1)
 
 	// Make grandparent point directly to this page if it has no more siblings
 	if (children.length === 1) {
@@ -200,9 +219,12 @@ async function tryCoalesce(
 		const child = grandParent
 			? grandParent.children[grandParent.index]
 			: header.child
-		promises.push(addFreePage(name, header, child.page))
+		newFreePages.push(child.page)
 		Object.assign(child, thisChild)
 	}
+
+	const promises = newFreePages.map(page => addFreePage(name, header, page))
+	promises.push(setNode(name, thisChild.page, node))
 	await Promise.all(promises)
 	return true
 }
