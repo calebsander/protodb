@@ -138,34 +138,21 @@ const runListDelete =
 		list.remove(name, getIndex(index))
 			.then(_ => ({}))
 			.catch(errorToString)
-async function runListGet(
-	{name, index}: NameIndexParams
-): Promise<BytesResponse> {
-	let data: Uint8Array
-	try {
-		data = await list.get(name, index)
-	}
-	catch (e) {
-		return errorToString(e)
-	}
-	return {data}
-}
+const runListGet =
+	({name, index}: NameIndexParams): Promise<BytesResponse> =>
+		list.get(name, index)
+			.then(data => ({data}))
+			.catch(errorToString)
 const runListInsert =
 	({name, index, value}: NameOptionalIndexValueParams): Promise<VoidResponse> =>
 		list.insert(name, getIndex(index), value)
 			.then(_ => ({}))
 			.catch(errorToString)
-async function runListSet(
-	{name, index, value}: NameIndexValueParams
-): Promise<VoidResponse> {
-	try {
-		await list.set(name, index, value)
-	}
-	catch (e) {
-		return errorToString(e)
-	}
-	return {}
-}
+const runListSet =
+	({name, index, value}: NameIndexValueParams): Promise<VoidResponse> =>
+		list.set(name, index, value)
+			.then(_ => ({}))
+			.catch(errorToString)
 const runListSize =
 	({name}: NameParams): Promise<SizeResponse> =>
 		list.size(name)

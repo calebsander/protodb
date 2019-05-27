@@ -7,7 +7,7 @@ import {Type} from '../pb/common'
 import {Command, commandType} from '../pb/request'
 import {concat} from '../util'
 
-const DB_PATH = 'dist/index.js'
+const DB_PATH = 'dist/main.js'
 
 const execPromise = promisify(exec)
 
