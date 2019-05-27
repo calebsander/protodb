@@ -6,6 +6,12 @@ message OptionalIndex {
 		sint64 value = 2;
 	}
 }
+message OptionalNonnegativeIndex {
+	oneof index {
+		EmptyType none = 1;
+		uint64 value = 2;
+	}
+}
 
 message NameParams {
 	string name = 1;
@@ -46,8 +52,8 @@ message NameOptionalIndexValueParams {
 }
 message NameRangeParams {
 	string name = 1;
-	OptionalIndex start = 2;
-	OptionalIndex end = 3;
+	OptionalNonnegativeIndex start = 2;
+	OptionalNonnegativeIndex end = 3;
 }
 
 message Command {

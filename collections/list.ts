@@ -230,30 +230,32 @@ async function tryCoalesce(
 }
 
 async function* sublistEntries(
-	name: string, page: number, start?: number, end?: number
+	name: string, page: number, start: number, end: number
 ): AsyncIterableIterator<Uint8Array> {
 	const node = await getNode(name, page)
 	if ('inner' in node) {
-		const hasStart = start !== undefined, hasEnd = end !== undefined
 		for (const {page, size} of node.inner.children) {
-			if (hasEnd && end! <= (hasStart ? start! : 0)) break
+			if (end <= 0) break
 
 			yield* sublistEntries(name, page, start, end)
-			if (hasStart) start = Math.max(start! - size, 0)
-			if (hasEnd) end! -= size
+			start -= size
+			end -= size
 		}
 	}
 	else {
 		const {values} = node.leaf
-		if (end === undefined) end = values.length
-		for (let i = start || 0; i < end; i++) yield values[i]
+		start = Math.max(start, 0)
+		end = Math.min(end, values.length)
+		for (let i = start; i < end; i++) yield values[i]
 	}
 }
 async function* listEntries(
 	name: string, start?: number, end?: number
 ): AsyncIterator<Uint8Array> {
-	const {child} = await getHeader(name)
-	yield *sublistEntries(name, child.page, start, end)
+	const {child: {page, size}} = await getHeader(name)
+	start = start || 0
+	if (end === undefined) end = size
+	yield *sublistEntries(name, page, start, end)
 }
 
 const iterators = new Iterators<AsyncIterator<Uint8Array>>()

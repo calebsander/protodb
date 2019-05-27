@@ -4,7 +4,13 @@ import {TestInterface} from 'ava'
 import {TestContext} from '../common'
 import {PAGE_SIZE} from '../../mmap-wrapper'
 import {FREE_LIST_END, freePageType, headerType, nodeType} from '../../pb/list'
-import {bytesResponseType, sizeResponseType, voidResponseType} from '../../pb/request'
+import {
+	bytesResponseType,
+	iterResponseType,
+	optionalBytesResponseType,
+	sizeResponseType,
+	voidResponseType
+} from '../../pb/request'
 
 const close = promisify(fs.close),
       fstat = promisify(fs.fstat),
@@ -13,7 +19,7 @@ const close = promisify(fs.close),
       stat = promisify(fs.stat)
 
 async function getDepth(context: TestContext, name: string): Promise<number> {
-	const fd = await open(context.getFile(name + '.list'), 'r')
+	const fd = await open(context.getFile(`${name}.list`), 'r')
 	const pageBuffer = new Uint8Array(PAGE_SIZE)
 	await read(fd, pageBuffer, 0, PAGE_SIZE, 0)
 	let {page} = headerType.toObject(
@@ -37,7 +43,7 @@ async function getDepth(context: TestContext, name: string): Promise<number> {
 }
 
 async function getPagesInUse(context: TestContext, name: string): Promise<number> {
-	const fd = await open(context.getFile(name + '.list'), 'r')
+	const fd = await open(context.getFile(`${name}.list`), 'r')
 	const totalPages = async () => {
 		const {size} = await fstat(fd)
 		return size / PAGE_SIZE
@@ -213,7 +219,7 @@ export default (test: TestInterface<TestContext>) => {
 		}
 		t.deepEqual(await getDepth(t.context, name), 1)
 		t.deepEqual(await getPagesInUse(t.context, name), 10)
-		const {size} = await stat(t.context.getFile(name + '.list'))
+		const {size} = await stat(t.context.getFile(`${name}.list`))
 
 		// Randomly remove the elements
 		for (let i = 1e3; i > 0; i--) {
@@ -261,7 +267,7 @@ export default (test: TestInterface<TestContext>) => {
 		}
 		t.deepEqual(await getDepth(t.context, name), 0)
 		t.deepEqual(await getPagesInUse(t.context, name), 2)
-		const newStat = await stat(t.context.getFile(name + '.list'))
+		const newStat = await stat(t.context.getFile(`${name}.list`))
 		t.deepEqual(newStat.size, size)
 	})
 
@@ -322,5 +328,121 @@ export default (test: TestInterface<TestContext>) => {
 		t.assert(await getPagesInUse(t.context, name) < 15)
 	})
 
-	// TODO: test iterators
+	test('list-iter', async t => {
+		const name = 'lit'
+		let result = await t.context.sendCommand(
+			{listCreate: {name}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+		const value = (i: number) =>
+			new Uint8Array(new Float64Array([i, i + 1]).buffer)
+		for (let i = 0; i < 1e3; i++) {
+			result = await t.context.sendCommand(
+				{listInsert: {name, index: {none: {}}, value: value(i)}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+		}
+
+		const tryOperations = async () => {
+			result = await t.context.sendCommand(
+				{listDelete: {name, index: {none: {}}}},
+				voidResponseType
+			)
+			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
+			result = await t.context.sendCommand(
+				{listInsert: {name, index: {none: {}}, value: new Uint8Array(3)}},
+				voidResponseType
+			)
+			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
+			result = await t.context.sendCommand(
+				{listSet: {name, index: 10, value: new Uint8Array(1)}},
+				voidResponseType
+			)
+			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
+		}
+
+		let allIter: Uint8Array
+		{
+			const result = await t.context.sendCommand(
+				{listIter: {name, start: {none: {}}, end: {none: {}}}},
+				iterResponseType
+			)
+			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
+			allIter = result.iter
+		}
+		await tryOperations()
+		for (let i = 0; i < 1e3; i++) {
+			const result = await t.context.sendCommand(
+				{listIterNext: {iter: allIter}},
+				optionalBytesResponseType
+			)
+			t.deepEqual(result, {data: value(i)})
+		}
+		{
+			const result = await t.context.sendCommand(
+				{listIterNext: {iter: allIter}},
+				optionalBytesResponseType
+			)
+			t.deepEqual(result, {none: {}})
+		}
+
+		await Promise.all(new Array(10).fill(0).map(async (_, i) => {
+			const start = i * 100, end = start + 100
+			let iter: Uint8Array
+			{
+				const result = await t.context.sendCommand(
+					{listIter: {name, start: {value: start}, end: {value: end}}},
+					iterResponseType
+				)
+				if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
+				;({iter} = result)
+			}
+			await tryOperations()
+			for (let i = 0; i < 100; i++) {
+				const result = await t.context.sendCommand(
+					{listIterNext: {iter}},
+					optionalBytesResponseType
+				)
+				t.deepEqual(result, {data: value(start + i)})
+			}
+			{
+				const result = await t.context.sendCommand(
+					{listIterNext: {iter}},
+					optionalBytesResponseType
+				)
+				t.deepEqual(result, {none: {}})
+			}
+		}))
+
+		{
+			const result = await t.context.sendCommand(
+				{listIter: {name, start: {value: 0}, end: {none: {}}}},
+				iterResponseType
+			)
+			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
+			allIter = result.iter
+		}
+		await tryOperations()
+		{
+			const result = await t.context.sendCommand(
+				{listIterNext: {iter: allIter}},
+				optionalBytesResponseType
+			)
+			t.deepEqual(result, {data: value(0)})
+		}
+		result = await t.context.sendCommand(
+			{listIterBreak: {iter: allIter}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+
+		// No more active iterators, so modifications should succeed
+		result = await t.context.sendCommand(
+			{listDelete: {name, index: {none: {}}}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+	})
 }
