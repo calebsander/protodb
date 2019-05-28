@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import net from 'net'
 import readline from 'readline'
 import {inspect} from 'util'
@@ -300,8 +302,9 @@ async function processCommands() {
 			continue
 		}
 
-		const client: net.Socket = net.connect(port)
-			.on('connect', () => client.end(commandType.encode(command).finish()))
+		const client: net.Socket = net.connect(port, undefined, () =>
+			client.end(commandType.encode(command).finish())
+		)
 		const response = await new Promise((resolve, reject) => {
 			const responseChunks: Buffer[] = []
 			client

@@ -2,20 +2,24 @@
 	"name": "protodb",
 	"version": "0.0.1",
 	"description": "ProtoDB",
-	"main": "dist/index.js",
+	"main": "dist/client/index.js",
+	"typings": "dist/client",
+	"bin": "dist/main.js",
 	"scripts": {
-		"build-ts": "rm -rf dist && tsc && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
-		"build-napi": "node-gyp configure build && cp build/Release/mmap.node dist/mmap-wrapper.node",
+		"build-ts": "rm -rf dist && tsc && tsc -p client && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
+		"build-napi": "node-gyp rebuild && cp build/Release/mmap.node dist/mmap-wrapper.node",
 		"build": "npm run build-ts && npm run build-napi",
+		"prepack": "npm run build-ts",
+		"install": "npm run build-napi",
 		"test": "npm run build && tsc -p test && nyc --reporter=lcov ava dist/test/main.js"
 	},
+	"files": ["binding.gyp", "dist", "mmap-wrapper/mmap.c"],
 	"author": "Caleb Sander",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^11.13.0",
 		"@types/yargs": "^13.0.0",
 		"ava": "^1.4.1",
-		"node-gyp": "^4.0.0",
 		"nyc": "^14.1.1",
 		"typescript": "^3.4.2"
 	},

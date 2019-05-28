@@ -91,7 +91,7 @@ export type OptionalBytesResponse = BytesResponse | {none: {}}
 export const optionalBytesResponseType =
 	protoFile.lookupType('OptionalBytesResponse') as Type<OptionalBytesResponse>
 
-interface KeyValuePair {
+export interface KeyValuePair {
 	key: Uint8Array
 	value: Uint8Array
 }

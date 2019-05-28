@@ -12,6 +12,7 @@ const DB_PATH = 'dist/main.js'
 
 const execPromise = promisify(exec)
 
+// TODO: expose a ProtoDBClient
 export class TestContext {
 	private static testIndex = 0
 
