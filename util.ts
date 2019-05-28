@@ -9,7 +9,3 @@ export function concat(buffers: Uint8Array[]): Uint8Array {
 	}
 	return result
 }
-export const toArrayBuffer = ({buffer, byteOffset, byteLength}: Uint8Array) =>
-	!byteOffset && byteLength === buffer.byteLength
-		? buffer
-		: buffer.slice(byteOffset, byteOffset + byteLength)

@@ -23,7 +23,6 @@ import {
 	Header,
 	headerType
 } from '../pb/hash'
-import {toArrayBuffer} from '../util'
 
 const COLLECTION_TYPE = 'hash'
 const INITIAL_DEPTH = 0
@@ -37,8 +36,8 @@ const equal = (buffer1: Uint8Array, buffer2: Uint8Array): boolean =>
 	!Buffer.from(buffer1).compare(buffer2)
 
 function fullHash(key: Uint8Array): number {
-	const hash =
-		new Int32Array(toArrayBuffer(createHash('md5').update(key).digest()))
+	const {buffer, byteOffset, length} = createHash('md5').update(key).digest()
+	const hash = new Int32Array(buffer, byteOffset, length >> 2)
 	let hash32 = 0
 	for (const word of hash) hash32 ^= word
 	return hash32

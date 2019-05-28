@@ -66,9 +66,11 @@ const setNode = (name: string, page: number, node: Node): Promise<void> =>
 async function lookup(name: string, index?: number, insert = false): Promise<PathItem[]> {
 	const {child: {size, page}} = await getHeader(name)
 	if (index === undefined) index = insert ? size : size - 1
-	if (index < 0) index += size
-	if (index < 0 || !(index < size || insert && index === size)) {
-		throw new Error(`Index ${index} is out of bounds in list of size ${size}`)
+	else {
+		if (index < -size || index >= size + Number(insert)) {
+			throw new Error(`Index ${index} is out of bounds in list of size ${size}`)
+		}
+		if (index < 0) index += size
 	}
 
 	const path: PathItem[] = []
@@ -118,7 +120,7 @@ const addFreePage = (name: string, header: Header, pageNo: number): Promise<void
 
 const split = <T>(arr: T[]): T[] => arr.splice(arr.length >> 1)
 function concat<T>(arr: T[], other: T[], left: boolean): void {
-	if (left) arr.splice(0, 0, ...other)
+	if (left) arr.unshift(...other)
 	else arr.push(...other)
 }
 

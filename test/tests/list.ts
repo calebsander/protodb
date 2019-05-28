@@ -478,4 +478,190 @@ export default (test: TestInterface<TestContext>) => {
 		)
 		t.deepEqual(result, {})
 	})
+
+	test('list-check', async t => {
+		const itemName = 'itm', undefinedName = 'not-a-thing'
+		let result = await t.context.sendCommand(
+			{itemCreate: {name: itemName}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+
+		await Promise.all([itemName, undefinedName].map(name => {
+			const errorResult = {error: `Error: Collection ${name} is not a list`}
+			return Promise.all([
+				t.context.sendCommand({listDrop: {name}}, voidResponseType)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{listDelete: {name, index: {none: {}}}},
+					voidResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{listGet: {name, index: 0}},
+					bytesResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{listInsert: {name, index: {none: {}}, value: new Uint8Array}},
+					voidResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{listSet: {name, index: 0, value: new Uint8Array}},
+					voidResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand({listSize: {name}}, sizeResponseType)
+					.then(result => t.deepEqual(result, errorResult)),
+				t.context.sendCommand(
+					{listIter: {name, start: {none: {}}, end: {none: {}}}},
+					iterResponseType
+				)
+					.then(result => t.deepEqual(result, errorResult))
+			])
+		}))
+
+		result = await t.context.sendCommand(
+			{listCreate: {name: itemName}},
+			voidResponseType
+		)
+		t.deepEqual(result, {error: `Error: Collection ${itemName} already exists`})
+
+		const name = 'existing'
+		result = await t.context.sendCommand({listCreate: {name}}, voidResponseType)
+		t.deepEqual(result, {})
+		result = await t.context.sendCommand({listCreate: {name}}, voidResponseType)
+		t.deepEqual(result, {error: `Error: Collection ${name} already exists`})
+	})
+
+	test('list-valid-indices', async t => {
+		const name = 'boundaries'
+		const length = 3
+		const getValue = (i: number) => new Uint8Array([i])
+		const withList = async (run: () => Promise<void>) => {
+			let result = await t.context.sendCommand(
+				{listCreate: {name}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+			for (let i = 0; i < length; i++) {
+				const result = await t.context.sendCommand(
+					{listInsert: {name, index: {none: {}}, value: getValue(i)}},
+					voidResponseType
+				)
+				t.deepEqual(result, {})
+			}
+			await run()
+			result = await t.context.sendCommand({listDrop: {name}}, voidResponseType)
+			t.deepEqual(result, {})
+		}
+
+		await withList(async () => {
+			for (let i = length * -2; i < -length; i++) {
+				const result = await t.context.sendCommand(
+					{listGet: {name, index: i}},
+					bytesResponseType
+				)
+				t.deepEqual(result, {
+					error: `Error: Index ${i} is out of bounds in list of size ${length}`
+				})
+			}
+			for (let i = -length; i < 0; i++) {
+				const result = await t.context.sendCommand(
+					{listGet: {name, index: i}},
+					bytesResponseType
+				)
+				t.deepEqual(result, {data: getValue(i + length)})
+			}
+			for (let i = 0; i < length; i++) {
+				const result = await t.context.sendCommand(
+					{listGet: {name, index: i}},
+					bytesResponseType
+				)
+				t.deepEqual(result, {data: getValue(i)})
+			}
+			for (let i = length; i < length * 2; i++) {
+				const result = await t.context.sendCommand(
+					{listGet: {name, index: i}},
+					bytesResponseType
+				)
+				t.deepEqual(result, {
+					error: `Error: Index ${i} is out of bounds in list of size ${length}`
+				})
+			}
+		})
+
+		await withList(async () => {
+			for (let i = length * -2; i < -length; i++) {
+				const result = await t.context.sendCommand(
+					{listSet: {name, index: i, value: new Uint8Array}},
+					voidResponseType
+				)
+				t.deepEqual(result, {
+					error: `Error: Index ${i} is out of bounds in list of size ${length}`
+				})
+			}
+			for (let i = -length; i < length; i++) {
+				const result = await t.context.sendCommand(
+					{listSet: {name, index: i, value: new Uint8Array}},
+					voidResponseType
+				)
+				t.deepEqual(result, {})
+			}
+			for (let i = length; i < length * 2; i++) {
+				const result = await t.context.sendCommand(
+					{listSet: {name, index: i, value: new Uint8Array}},
+					voidResponseType
+				)
+				t.deepEqual(result, {
+					error: `Error: Index ${i} is out of bounds in list of size ${length}`
+				})
+			}
+		})
+
+		await withList(async () => {
+			for (let i = length * -2; i < -length; i++) {
+				const result = await t.context.sendCommand(
+					{listInsert: {name, index: {value: i}, value: new Uint8Array}},
+					voidResponseType
+				)
+				t.deepEqual(result, {
+					error: `Error: Index ${i} is out of bounds in list of size ${length}`
+				})
+			}
+			let newLength = length
+			let result = await t.context.sendCommand(
+				{listInsert: {name, index: {value: -newLength++}, value: new Uint8Array}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+			result = await t.context.sendCommand(
+				{listInsert: {name, index: {value: -1}, value: new Uint8Array}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+			newLength++
+			result = await t.context.sendCommand(
+				{listInsert: {name, index: {value: 0}, value: new Uint8Array}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+			newLength++
+			result = await t.context.sendCommand(
+				{listInsert: {name, index: {value: newLength++}, value: new Uint8Array}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+			for (let i = newLength + 1; i < newLength * 2; i++) {
+				const result = await t.context.sendCommand(
+					{listInsert: {name, index: {value: i}, value: new Uint8Array}},
+					voidResponseType
+				)
+				t.deepEqual(result, {
+					error: `Error: Index ${i} is out of bounds in list of size ${newLength}`
+				})
+			}
+		})
+	})
 }
