@@ -137,6 +137,62 @@ function getParent(path: PathItem[]) {
 	return {children, index}
 }
 
+async function saveWithOverflow(name: string, path: PathItem[], insert: boolean): Promise<void> {
+	const header = await getHeader(name)
+	while (path.length) {
+		const {page, node} = path.pop()!
+		const parent = getParent(path)
+		try {
+			await setNode(name, page, node)
+
+			// Saved node without overflowing
+			if (insert) {
+				if (parent) {
+					const {children, index} = parent
+					children[index].size++
+				}
+			}
+			else break
+		}
+		catch (e) {
+			// Node overflowed
+			if (!(e instanceof RangeError && e.message === 'Source is too large')) {
+				throw e // unexpected error; rethrow it
+			}
+
+			// TODO: this doesn't split leaves evenly
+			const newNode: Node = 'inner' in node
+				? {inner: {children: split(node.inner.children)}}
+				// Make copies of values since they are slices of the old page,
+				// which will be overwritten
+				: {leaf: {values: split(node.leaf.values).map(value => value.slice())}}
+			const newPage = await getFreePage(name, header)
+			const children = [
+				{size: nodeSize(node), page},
+				{size: nodeSize(newNode), page: newPage}
+			]
+			const promises = [
+				setNode(name, page, node),
+				setNode(name, newPage, newNode)
+			]
+			if (parent) {
+				parent.children.splice(parent.index, 1, ...children)
+			}
+			else { // splitting the root node
+				const makeNewRoot = async () => {
+					const rootPage = await getFreePage(name, header)
+					header.child.page = rootPage
+					await setNode(name, rootPage, {inner: {children}})
+				}
+				promises.push(makeNewRoot())
+			}
+			await Promise.all(promises)
+		}
+	}
+	if (insert) header.child.size++
+	await setHeader(name, header)
+}
+
 async function tryCoalesce(
 	name: string, node: Node, path: PathItem[], header: Header
 ): Promise<boolean> {
@@ -320,54 +376,7 @@ export async function insert(
 	const [{index, node}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	node.leaf.values.splice(index, 0, value)
-	const header = await getHeader(name)
-	while (path.length) {
-		const {page, node} = path.pop()!
-		const parent = getParent(path)
-		try {
-			await setNode(name, page, node)
-			if (parent) {
-				const {children, index} = parent
-				children[index].size++
-			}
-		}
-		catch (e) {
-			// Node overflowed
-			if (!(e instanceof RangeError && e.message === 'Source is too large')) {
-				throw e // unexpected error; rethrow it
-			}
-
-			const newNode: Node = 'inner' in node
-				? {inner: {children: split(node.inner.children)}}
-				: {leaf: {values: split(node.leaf.values)}}
-			const newPage = await getFreePage(name, header)
-			const oldChild = {size: nodeSize(node), page},
-						newChild = {size: nodeSize(newNode), page: newPage}
-			const promises = [(async () => {
-				await setNode(name, newPage, newNode)
-				// Need to wait to overwrite the old node until the new node is written
-				// because leaf values are slices of the old page
-				await setNode(name, page, node)
-			})()]
-			if (parent) {
-				const {children, index} = parent
-				children.splice(index, 1, oldChild, newChild)
-			}
-			else { // splitting the root node
-				const makeNewRoot = async () => {
-					const rootPage = await getFreePage(name, header)
-					header.child.page = rootPage
-					await setNode(
-						name, rootPage, {inner: {children: [oldChild, newChild]}}
-					)
-				}
-				promises.push(makeNewRoot())
-			}
-			await Promise.all(promises)
-		}
-	}
-	header.child.size++
-	await setHeader(name, header)
+	await saveWithOverflow(name, path, true)
 }
 
 export async function set(
@@ -376,10 +385,10 @@ export async function set(
 	await checkIsList(name)
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex)
-	const [{page, index, node}] = path.slice(-1)
+	const [{index, node}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	node.leaf.values[index] = value
-	await setNode(name, page, node)
+	await saveWithOverflow(name, path, false)
 }
 
 export async function size(name: string): Promise<number> {

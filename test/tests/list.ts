@@ -69,6 +69,39 @@ async function getPagesInUse(context: TestContext, name: string): Promise<number
 }
 
 export default (test: TestInterface<TestContext>) => {
+	test('list-get-set', async t => {
+		const name = 'arr'
+		let result = await t.context.sendCommand(
+			{listCreate: {name}},
+			voidResponseType
+		)
+		t.deepEqual(result, {})
+		for (let i = 0; i < 1e3; i++) {
+			result = await t.context.sendCommand(
+				{listInsert: {name, index: {none: {}}, value: new Uint8Array(10)}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+		}
+		const getValue = (i: number) => new Uint8Array(20).map((_, j) => i + j)
+		for (let i = 999; i >= 0; i--) {
+			result = await t.context.sendCommand(
+				{listSet: {name, index: i, value: getValue(i)}},
+				voidResponseType
+			)
+			t.deepEqual(result, {})
+		}
+		for (let i = 0; i < 1e3; i++) {
+			const result = await t.context.sendCommand(
+				{listGet: {name, index: i}},
+				bytesResponseType
+			)
+			t.deepEqual(result, {data: getValue(i)})
+		}
+		result = await t.context.sendCommand({listDrop: {name}}, voidResponseType)
+		t.deepEqual(result, {})
+	})
+
 	test('list-stack', async t => {
 		const name = 'stck'
 		let result = await t.context.sendCommand(
