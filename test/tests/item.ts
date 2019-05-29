@@ -19,7 +19,10 @@ export default (test: TestInterface<TestContext>) => {
 		await t.context.client.itemCreate(name)
 		await t.throwsAsync(
 			() => t.context.client.itemGet(name),
-			ProtoDBError, `Error: Collection ${name} has not been set`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} has not been set`
+			}
 		)
 		await t.context.client.itemDrop(name)
 	})
@@ -34,22 +37,29 @@ export default (test: TestInterface<TestContext>) => {
 					() => t.context.client.itemDrop(name),
 					() => t.context.client.itemGet(name),
 					() => t.context.client.itemSet(name, new ArrayBuffer(3))
-				].map(action =>
-					t.throwsAsync(action, ProtoDBError, `Error: Collection ${name} is not an item`)
-				)
+				].map(action => t.throwsAsync(action, {
+					instanceOf: ProtoDBError,
+					message: `Error: Collection ${name} is not an item`
+				}))
 			)
 		))
 
 		await t.throwsAsync(
 			() => t.context.client.itemCreate(hashName),
-			ProtoDBError, `Error: Collection ${hashName} already exists`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${hashName} already exists`
+			}
 		)
 
 		const name = 'existingItem'
 		await t.context.client.itemCreate(name)
 		await t.throwsAsync(
 			() => t.context.client.itemCreate(name),
-			ProtoDBError, `Error: Collection ${name} already exists`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} already exists`
+			}
 		)
 	})
 }

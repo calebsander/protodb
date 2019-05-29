@@ -216,9 +216,10 @@ export default (test: TestInterface<TestContext>) => {
 				() => t.context.client.listDelete(name),
 				() => t.context.client.listInsert(name, new ArrayBuffer(3)),
 				() => t.context.client.listSet(name, 10, new Uint8Array(1))
-			].map(action => t.throwsAsync(
-				action, ProtoDBError, `Error: Collection ${name} has active iterators`
-			))
+			].map(action => t.throwsAsync(action, {
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} has active iterators`
+			}))
 		)
 
 		let allIter = await t.context.client.listIter(name)
@@ -266,22 +267,29 @@ export default (test: TestInterface<TestContext>) => {
 					() => t.context.client.listSet(name, 0, new ArrayBuffer(0)),
 					() => t.context.client.listSize(name),
 					() => t.context.client.listIter(name)
-				].map(action => t.throwsAsync(
-					action, ProtoDBError, `Error: Collection ${name} is not a list`
-				))
+				].map(action => t.throwsAsync(action, {
+					instanceOf: ProtoDBError,
+					message: `Error: Collection ${name} is not a list`
+				}))
 			)
 		))
 
 		await t.throwsAsync(
 			() => t.context.client.listCreate(itemName),
-			ProtoDBError, `Error: Collection ${itemName} already exists`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${itemName} already exists`
+			}
 		)
 
 		const name = 'existing'
 		await t.context.client.listCreate(name)
 		await t.throwsAsync(
 			() => t.context.client.listCreate(name),
-			ProtoDBError, `Error: Collection ${name} already exists`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} already exists`
+			}
 		)
 	})
 
@@ -302,8 +310,10 @@ export default (test: TestInterface<TestContext>) => {
 			for (let i = length * -2; i < -length; i++) {
 				await t.throwsAsync(
 					() => t.context.client.listGet(name, i),
-					ProtoDBError,
-					`Error: Index ${i} is out of bounds in list of size ${length}`
+					{
+						instanceOf: ProtoDBError,
+						message: `Error: Index ${i} is out of bounds in list of size ${length}`
+					}
 				)
 			}
 			for (let i = -length; i < 0; i++) {
@@ -317,8 +327,10 @@ export default (test: TestInterface<TestContext>) => {
 			for (let i = length; i < length * 2; i++) {
 				await t.throwsAsync(
 					() => t.context.client.listGet(name, i),
-					ProtoDBError,
-					`Error: Index ${i} is out of bounds in list of size ${length}`
+					{
+						instanceOf: ProtoDBError,
+						message: `Error: Index ${i} is out of bounds in list of size ${length}`
+					}
 				)
 			}
 		})
@@ -327,8 +339,10 @@ export default (test: TestInterface<TestContext>) => {
 			for (let i = length * -2; i < -length; i++) {
 				await t.throwsAsync(
 					() => t.context.client.listSet(name, i, new Uint8Array),
-					ProtoDBError,
-					`Error: Index ${i} is out of bounds in list of size ${length}`
+					{
+						instanceOf: ProtoDBError,
+						message: `Error: Index ${i} is out of bounds in list of size ${length}`
+					}
 				)
 			}
 			for (let i = -length; i < length; i++) {
@@ -337,8 +351,10 @@ export default (test: TestInterface<TestContext>) => {
 			for (let i = length; i < length * 2; i++) {
 				await t.throwsAsync(
 					() => t.context.client.listSet(name, i, new Uint8Array),
-					ProtoDBError,
-					`Error: Index ${i} is out of bounds in list of size ${length}`
+					{
+						instanceOf: ProtoDBError,
+						message: `Error: Index ${i} is out of bounds in list of size ${length}`
+					}
 				)
 			}
 		})
@@ -347,8 +363,10 @@ export default (test: TestInterface<TestContext>) => {
 			for (let i = length * -2; i < -length; i++) {
 				await t.throwsAsync(
 					() => t.context.client.listInsert(name, new Uint8Array, i),
-					ProtoDBError,
-					`Error: Index ${i} is out of bounds in list of size ${length}`
+					{
+						instanceOf: ProtoDBError,
+						message: `Error: Index ${i} is out of bounds in list of size ${length}`
+					}
 				)
 			}
 			let newLength = length
@@ -361,8 +379,10 @@ export default (test: TestInterface<TestContext>) => {
 			for (let i = newLength + 1; i < newLength * 2; i++) {
 				await t.throwsAsync(
 					() => t.context.client.listInsert(name, new Uint8Array, i),
-					ProtoDBError,
-					`Error: Index ${i} is out of bounds in list of size ${length}`
+					{
+						instanceOf: ProtoDBError,
+						message: `Error: Index ${i} is out of bounds in list of size ${newLength}`
+					}
 				)
 			}
 		})

@@ -120,9 +120,10 @@ export default (test: TestInterface<TestContext>) => {
 				() => t.context.client.hashDrop(name),
 				() => t.context.client.hashDelete(name, new Uint8Array(3)),
 				() => t.context.client.hashSet(name, new Uint8Array(3), new Uint8Array(1))
-			].map(action => t.throwsAsync(
-				action, ProtoDBError, `Error: Collection ${name} has active iterators`
-			))
+			].map(action => t.throwsAsync(action, {
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} has active iterators`
+			}))
 		)
 		await tryOperations()
 
@@ -141,7 +142,10 @@ export default (test: TestInterface<TestContext>) => {
 		await t.context.client.hashIterBreak(iter2)
 		await t.throwsAsync(
 			() => t.context.client.hashIterBreak(iter2),
-			ProtoDBError, 'Error: Unknown iterator'
+			{
+				instanceOf: ProtoDBError,
+				message: 'Error: Unknown iterator'
+			}
 		)
 		await tryOperations()
 
@@ -158,12 +162,15 @@ export default (test: TestInterface<TestContext>) => {
 		t.deepEqual(result, null)
 
 		// Both iterators should now be invalid
-		for (const iter of [iter1, iter2]) {
-			await t.throwsAsync(
+		await Promise.all([iter1, iter2].map(iter =>
+			t.throwsAsync(
 				() => t.context.client.hashIterNext(iter),
-				ProtoDBError, 'Error: Unknown iterator'
+				{
+					instanceOf: ProtoDBError,
+					message: 'Error: Unknown iterator'
+				}
 			)
-		}
+		))
 	})
 
 	test('hash-check', async t => {
@@ -179,22 +186,29 @@ export default (test: TestInterface<TestContext>) => {
 					() => t.context.client.hashSet(name, new Uint8Array, new ArrayBuffer(0)),
 					() => t.context.client.hashSize(name),
 					() => t.context.client.hashIter(name)
-				].map(action => t.throwsAsync(
-					action, ProtoDBError, `Error: Collection ${name} is not a hash`
-				))
+				].map(action => t.throwsAsync(action, {
+					instanceOf: ProtoDBError,
+					message: `Error: Collection ${name} is not a hash`
+				}))
 			)
 		))
 
 		await t.throwsAsync(
 			() => t.context.client.hashCreate(listName),
-			ProtoDBError, `Error: Collection ${listName} already exists`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${listName} already exists`
+			}
 		)
 
 		const name = 'already_created'
 		await t.context.client.hashCreate(name)
 		await t.throwsAsync(
 			() => t.context.client.hashCreate(name),
-			ProtoDBError, `Error: Collection ${name} already exists`
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} already exists`
+			}
 		)
 	})
 
