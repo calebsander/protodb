@@ -6,9 +6,7 @@ import listTest from './tests/list'
 
 const test = anyTest as TestInterface<TestContext>
 
-test.beforeEach(t => {
-	t.context = new TestContext
-})
+test.beforeEach(t => (t.context = new TestContext).ready)
 
 itemTest(test)
 hashTest(test)

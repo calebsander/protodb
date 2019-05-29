@@ -2,15 +2,9 @@ import fs from 'fs'
 import {promisify} from 'util'
 import {TestInterface} from 'ava'
 import {TestContext} from '../common'
+import {ProtoDBError} from '../../client'
 import {PAGE_SIZE} from '../../mmap-wrapper'
 import {FREE_LIST_END, freePageType, headerType, nodeType} from '../../pb/list'
-import {
-	bytesResponseType,
-	iterResponseType,
-	optionalBytesResponseType,
-	sizeResponseType,
-	voidResponseType
-} from '../../pb/request'
 
 const close = promisify(fs.close),
       fstat = promisify(fs.fstat),
@@ -71,184 +65,78 @@ async function getPagesInUse(context: TestContext, name: string): Promise<number
 export default (test: TestInterface<TestContext>) => {
 	test('list-get-set', async t => {
 		const name = 'arr'
-		let result = await t.context.sendCommand(
-			{listCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listCreate(name)
 		for (let i = 0; i < 1e3; i++) {
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: new Uint8Array(10)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, new Uint8Array(10))
 		}
 		const getValue = (i: number) => new Uint8Array(20).map((_, j) => i + j)
 		for (let i = 999; i >= 0; i--) {
-			result = await t.context.sendCommand(
-				{listSet: {name, index: i, value: getValue(i)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listSet(name, i, getValue(i))
 		}
 		for (let i = 0; i < 1e3; i++) {
-			const result = await t.context.sendCommand(
-				{listGet: {name, index: i}},
-				bytesResponseType
-			)
-			t.deepEqual(result, {data: getValue(i)})
+			const result = await t.context.client.listGet(name, i)
+			t.deepEqual(result, getValue(i))
 		}
-		result = await t.context.sendCommand({listDrop: {name}}, voidResponseType)
-		t.deepEqual(result, {})
+		await t.context.client.listDrop(name)
 	})
 
 	test('list-stack', async t => {
 		const name = 'stck'
-		let result = await t.context.sendCommand(
-			{listCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listCreate(name)
 		const getValue = (i: number) =>
 			new Uint8Array(new Int32Array(10).fill(i).buffer)
 		for (let i = 0; i < 1e3; i++) {
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: getValue(i * 2)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: getValue(i * 2 + 1)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: -1}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(i * 2 + 1)})
-			}
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {none: {}}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: i + 1})
-			}
+			await t.context.client.listInsert(name, getValue(i * 2))
+			await t.context.client.listInsert(name, getValue(i * 2 + 1))
+			const popped = await t.context.client.listGet(name, -1)
+			t.deepEqual(popped, getValue(i * 2 + 1))
+			await t.context.client.listDelete(name)
+			const size = await t.context.client.listSize(name)
+			t.deepEqual(size, i + 1)
 		}
 		for (let i = 999; i >= 0; i--) {
-			{
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: -1}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(i * 2)})
-			}
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {none: {}}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: i})
-			}
+			const popped = await t.context.client.listGet(name, -1)
+			t.deepEqual(popped, getValue(i * 2))
+			await t.context.client.listDelete(name)
+			const size = await t.context.client.listSize(name)
+			t.deepEqual(size, i)
 		}
-		result = await t.context.sendCommand({listDrop: {name}}, voidResponseType)
-		t.deepEqual(result, {})
+		await t.context.client.listDrop(name)
 	})
 
 	test('list-queue', async t => {
 		const name = 'q'
-		let result = await t.context.sendCommand(
-			{listCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listCreate(name)
 		const getValue = (i: number) =>
 			new Uint8Array(new Int32Array(10).fill(i).buffer)
 		for (let i = 0; i < 1e3; i++) {
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: getValue(i * 2)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: getValue(i * 2 + 1)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: 0}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(i)})
-			}
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {value: 0}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: i + 1})
-			}
+			await t.context.client.listInsert(name, getValue(i * 2))
+			await t.context.client.listInsert(name, getValue(i * 2 + 1))
+			const dequeued = await t.context.client.listGet(name, 0)
+			t.deepEqual(dequeued, getValue(i))
+			await t.context.client.listDelete(name, 0)
+			const size = await t.context.client.listSize(name)
+			t.deepEqual(size, i + 1)
 		}
 		for (let i = 0; i < 1e3; i++) {
-			{
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: 0}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(1e3 + i)})
-			}
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {value: 0}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: 999 - i})
-			}
+			const dequeued = await t.context.client.listGet(name, 0)
+			t.deepEqual(dequeued, getValue(1e3 + i))
+			await t.context.client.listDelete(name, 0)
+			const size = await t.context.client.listSize(name)
+			t.deepEqual(size, 999 - i)
 		}
-		result = await t.context.sendCommand({listDrop: {name}}, voidResponseType)
-		t.deepEqual(result, {})
+		await t.context.client.listDrop(name)
 	})
 
 	test('list-reclaim', async t => {
 		const name = 'shrinky'
-		let result = await t.context.sendCommand(
-			{listCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listCreate(name)
 		const value = (i: number) =>
 			new Uint8Array(new Float64Array([i, i + 1]).buffer)
 
 		// Add 1000 elements to the list
 		for (let i = 0; i < 1e3; i++) {
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: value(i)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, value(i))
 		}
 		t.deepEqual(await getDepth(t.context, name), 1)
 		t.deepEqual(await getPagesInUse(t.context, name), 10)
@@ -256,47 +144,25 @@ export default (test: TestInterface<TestContext>) => {
 
 		// Randomly remove the elements
 		for (let i = 1e3; i > 0; i--) {
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {value: (Math.random() * i) | 0}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: i - 1})
-			}
+			await t.context.client.listDelete(name, (Math.random() * i) | 0)
+			const result = await t.context.client.listSize(name)
+			t.deepEqual(result, i - 1)
 		}
 		t.deepEqual(await getDepth(t.context, name), 0)
 		t.deepEqual(await getPagesInUse(t.context, name), 2)
 
 		// Add elements back to the list
 		for (let i = 0; i < 1e3; i++) {
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {value: 0}, value: value(i)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, value(i), 0)
 		}
 		t.deepEqual(await getDepth(t.context, name), 1)
 		t.deepEqual(await getPagesInUse(t.context, name), 10)
 
 		// Remove elements, ensure list file hasn't grown
 		for (let i = 1e3; i > 0; i--) {
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {value: (Math.random() * i) | 0}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: i - 1})
-			}
+			await t.context.client.listDelete(name, (Math.random() * i) | 0)
+			const result = await t.context.client.listSize(name)
+			t.deepEqual(result, i - 1)
 		}
 		t.deepEqual(await getDepth(t.context, name), 0)
 		t.deepEqual(await getPagesInUse(t.context, name), 2)
@@ -306,55 +172,30 @@ export default (test: TestInterface<TestContext>) => {
 
 	test('list-multilevel', async t => {
 		const name = 'bigger'
-		let result = await t.context.sendCommand(
-			{listCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listCreate(name)
 		// Only one value will fit in each leaf
 		const getValue = (i: number) => new Uint8Array(3e3 + i % 10).fill(i)
 		const values: number[] = []
 		while (values.length < 2e3) {
 			const index = (Math.random() * (values.length + 1)) | 0
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {value: index}, value: getValue(values.length)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, getValue(values.length), index)
 			values.splice(index, 0, values.length)
 		}
 		for (let i = 0; i < 2e3; i++) {
-			const result = await t.context.sendCommand(
-				{listGet: {name, index: i}},
-				bytesResponseType
-			)
-			t.deepEqual(result, {data: getValue(values[i])})
+			const result = await t.context.client.listGet(name, i)
+			t.deepEqual(result, getValue(values[i]))
 		}
 		t.deepEqual(await getDepth(t.context, name), 2)
 		t.deepEqual(await getPagesInUse(t.context, name), 2006) // 2000 leaves, 5 inner pages, and header
 		while (values.length) {
 			// Sample a random value and delete it
 			const index = (Math.random() * values.length) | 0
-			{
-				const result = await t.context.sendCommand(
-					{listGet: {name, index}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(values[index])})
-			}
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {value: index}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			const value = await t.context.client.listGet(name, index)
+			t.deepEqual(value, getValue(values[index]))
+			await t.context.client.listDelete(name, index)
 			values.splice(index, 1)
-			{
-				const result = await t.context.sendCommand(
-					{listSize: {name}},
-					sizeResponseType
-				)
-				t.deepEqual(result, {size: values.length})
-			}
+			const size = await t.context.client.listSize(name)
+			t.deepEqual(size, values.length)
 		}
 		// Coalescing isn't always perfect, but it should reclaim most of the pages
 		t.assert(await getDepth(t.context, name) <= 1)
@@ -363,176 +204,85 @@ export default (test: TestInterface<TestContext>) => {
 
 	test('list-iter', async t => {
 		const name = 'lit'
-		let result = await t.context.sendCommand(
-			{listCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
-		const value = (i: number) =>
+		await t.context.client.listCreate(name)
+		const getValue = (i: number) =>
 			new Uint8Array(new Float64Array([i, i + 1]).buffer)
 		for (let i = 0; i < 1e3; i++) {
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: value(i)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, getValue(i))
 		}
 
-		const tryOperations = async () => {
-			result = await t.context.sendCommand(
-				{listDelete: {name, index: {none: {}}}},
-				voidResponseType
-			)
-			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {none: {}}, value: new Uint8Array(3)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
-			result = await t.context.sendCommand(
-				{listSet: {name, index: 10, value: new Uint8Array(1)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
-		}
+		const tryOperations = () => Promise.all(
+			[
+				() => t.context.client.listDelete(name),
+				() => t.context.client.listInsert(name, new ArrayBuffer(3)),
+				() => t.context.client.listSet(name, 10, new Uint8Array(1))
+			].map(action => t.throwsAsync(
+				action, ProtoDBError, `Error: Collection ${name} has active iterators`
+			))
+		)
 
-		let allIter: Uint8Array
-		{
-			const result = await t.context.sendCommand(
-				{listIter: {name, start: {none: {}}, end: {none: {}}}},
-				iterResponseType
-			)
-			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
-			allIter = result.iter
-		}
+		let allIter = await t.context.client.listIter(name)
 		await tryOperations()
 		for (let i = 0; i < 1e3; i++) {
-			const result = await t.context.sendCommand(
-				{listIterNext: {iter: allIter}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, {data: value(i)})
+			const result = await t.context.client.listIterNext(allIter)
+			t.deepEqual(result, getValue(i))
 		}
-		{
-			const result = await t.context.sendCommand(
-				{listIterNext: {iter: allIter}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, {none: {}})
-		}
+		let result = await t.context.client.listIterNext(allIter)
+		t.deepEqual(result, null)
 
 		await Promise.all(new Array(10).fill(0).map(async (_, i) => {
 			const start = i * 100, end = start + 100
-			let iter: Uint8Array
-			{
-				const result = await t.context.sendCommand(
-					{listIter: {name, start: {value: start}, end: {value: end}}},
-					iterResponseType
-				)
-				if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
-				;({iter} = result)
-			}
+			const iter = await t.context.client.listIter(name, start, end)
 			await tryOperations()
 			for (let i = 0; i < 100; i++) {
-				const result = await t.context.sendCommand(
-					{listIterNext: {iter}},
-					optionalBytesResponseType
-				)
-				t.deepEqual(result, {data: value(start + i)})
+				const result = await t.context.client.listIterNext(iter)
+				t.deepEqual(result, getValue(start + i))
 			}
-			{
-				const result = await t.context.sendCommand(
-					{listIterNext: {iter}},
-					optionalBytesResponseType
-				)
-				t.deepEqual(result, {none: {}})
-			}
+			const result = await t.context.client.listIterNext(iter)
+			t.deepEqual(result, null)
 		}))
 
-		{
-			const result = await t.context.sendCommand(
-				{listIter: {name, start: {value: 0}, end: {none: {}}}},
-				iterResponseType
-			)
-			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
-			allIter = result.iter
-		}
+		allIter = await t.context.client.listIter(name, 0)
 		await tryOperations()
-		{
-			const result = await t.context.sendCommand(
-				{listIterNext: {iter: allIter}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, {data: value(0)})
-		}
-		result = await t.context.sendCommand(
-			{listIterBreak: {iter: allIter}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		result = await t.context.client.listIterNext(allIter)
+		t.deepEqual(result, getValue(0))
+		await t.context.client.listIterBreak(allIter)
 
 		// No more active iterators, so modifications should succeed
-		result = await t.context.sendCommand(
-			{listDelete: {name, index: {none: {}}}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listDelete(name)
 	})
 
 	test('list-check', async t => {
 		const itemName = 'itm', undefinedName = 'not-a-thing'
-		let result = await t.context.sendCommand(
-			{itemCreate: {name: itemName}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.itemCreate(itemName)
 
-		await Promise.all([itemName, undefinedName].map(name => {
-			const errorResult = {error: `Error: Collection ${name} is not a list`}
-			return Promise.all([
-				t.context.sendCommand({listDrop: {name}}, voidResponseType)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{listDelete: {name, index: {none: {}}}},
-					voidResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{listGet: {name, index: 0}},
-					bytesResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{listInsert: {name, index: {none: {}}, value: new Uint8Array}},
-					voidResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{listSet: {name, index: 0, value: new Uint8Array}},
-					voidResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand({listSize: {name}}, sizeResponseType)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{listIter: {name, start: {none: {}}, end: {none: {}}}},
-					iterResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult))
-			])
-		}))
+		await Promise.all([itemName, undefinedName].map(name =>
+			Promise.all(
+				[
+					() => t.context.client.listDrop(name),
+					() => t.context.client.listDelete(name),
+					() => t.context.client.listGet(name, 0),
+					() => t.context.client.listInsert(name, new Uint8Array),
+					() => t.context.client.listSet(name, 0, new ArrayBuffer(0)),
+					() => t.context.client.listSize(name),
+					() => t.context.client.listIter(name)
+				].map(action => t.throwsAsync(
+					action, ProtoDBError, `Error: Collection ${name} is not a list`
+				))
+			)
+		))
 
-		result = await t.context.sendCommand(
-			{listCreate: {name: itemName}},
-			voidResponseType
+		await t.throwsAsync(
+			() => t.context.client.listCreate(itemName),
+			ProtoDBError, `Error: Collection ${itemName} already exists`
 		)
-		t.deepEqual(result, {error: `Error: Collection ${itemName} already exists`})
 
 		const name = 'existing'
-		result = await t.context.sendCommand({listCreate: {name}}, voidResponseType)
-		t.deepEqual(result, {})
-		result = await t.context.sendCommand({listCreate: {name}}, voidResponseType)
-		t.deepEqual(result, {error: `Error: Collection ${name} already exists`})
+		await t.context.client.listCreate(name)
+		await t.throwsAsync(
+			() => t.context.client.listCreate(name),
+			ProtoDBError, `Error: Collection ${name} already exists`
+		)
 	})
 
 	test('list-valid-indices', async t => {
@@ -540,127 +290,80 @@ export default (test: TestInterface<TestContext>) => {
 		const length = 3
 		const getValue = (i: number) => new Uint8Array([i])
 		const withList = async (run: () => Promise<void>) => {
-			let result = await t.context.sendCommand(
-				{listCreate: {name}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listCreate(name)
 			for (let i = 0; i < length; i++) {
-				const result = await t.context.sendCommand(
-					{listInsert: {name, index: {none: {}}, value: getValue(i)}},
-					voidResponseType
-				)
-				t.deepEqual(result, {})
+				await t.context.client.listInsert(name, getValue(i))
 			}
 			await run()
-			result = await t.context.sendCommand({listDrop: {name}}, voidResponseType)
-			t.deepEqual(result, {})
+			await t.context.client.listDrop(name)
 		}
 
 		await withList(async () => {
 			for (let i = length * -2; i < -length; i++) {
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: i}},
-					bytesResponseType
+				await t.throwsAsync(
+					() => t.context.client.listGet(name, i),
+					ProtoDBError,
+					`Error: Index ${i} is out of bounds in list of size ${length}`
 				)
-				t.deepEqual(result, {
-					error: `Error: Index ${i} is out of bounds in list of size ${length}`
-				})
 			}
 			for (let i = -length; i < 0; i++) {
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: i}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(i + length)})
+				const result = await t.context.client.listGet(name, i)
+				t.deepEqual(result, getValue(length + i))
 			}
 			for (let i = 0; i < length; i++) {
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: i}},
-					bytesResponseType
-				)
-				t.deepEqual(result, {data: getValue(i)})
+				const result = await t.context.client.listGet(name, i)
+				t.deepEqual(result, getValue(i))
 			}
 			for (let i = length; i < length * 2; i++) {
-				const result = await t.context.sendCommand(
-					{listGet: {name, index: i}},
-					bytesResponseType
+				await t.throwsAsync(
+					() => t.context.client.listGet(name, i),
+					ProtoDBError,
+					`Error: Index ${i} is out of bounds in list of size ${length}`
 				)
-				t.deepEqual(result, {
-					error: `Error: Index ${i} is out of bounds in list of size ${length}`
-				})
 			}
 		})
 
 		await withList(async () => {
 			for (let i = length * -2; i < -length; i++) {
-				const result = await t.context.sendCommand(
-					{listSet: {name, index: i, value: new Uint8Array}},
-					voidResponseType
+				await t.throwsAsync(
+					() => t.context.client.listSet(name, i, new Uint8Array),
+					ProtoDBError,
+					`Error: Index ${i} is out of bounds in list of size ${length}`
 				)
-				t.deepEqual(result, {
-					error: `Error: Index ${i} is out of bounds in list of size ${length}`
-				})
 			}
 			for (let i = -length; i < length; i++) {
-				const result = await t.context.sendCommand(
-					{listSet: {name, index: i, value: new Uint8Array}},
-					voidResponseType
-				)
-				t.deepEqual(result, {})
+				await t.context.client.listSet(name, i, new Uint8Array)
 			}
 			for (let i = length; i < length * 2; i++) {
-				const result = await t.context.sendCommand(
-					{listSet: {name, index: i, value: new Uint8Array}},
-					voidResponseType
+				await t.throwsAsync(
+					() => t.context.client.listSet(name, i, new Uint8Array),
+					ProtoDBError,
+					`Error: Index ${i} is out of bounds in list of size ${length}`
 				)
-				t.deepEqual(result, {
-					error: `Error: Index ${i} is out of bounds in list of size ${length}`
-				})
 			}
 		})
 
 		await withList(async () => {
 			for (let i = length * -2; i < -length; i++) {
-				const result = await t.context.sendCommand(
-					{listInsert: {name, index: {value: i}, value: new Uint8Array}},
-					voidResponseType
+				await t.throwsAsync(
+					() => t.context.client.listInsert(name, new Uint8Array, i),
+					ProtoDBError,
+					`Error: Index ${i} is out of bounds in list of size ${length}`
 				)
-				t.deepEqual(result, {
-					error: `Error: Index ${i} is out of bounds in list of size ${length}`
-				})
 			}
 			let newLength = length
-			let result = await t.context.sendCommand(
-				{listInsert: {name, index: {value: -newLength++}, value: new Uint8Array}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {value: -1}, value: new Uint8Array}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, new Uint8Array, -newLength++)
+			await t.context.client.listInsert(name, new Uint8Array, -1)
 			newLength++
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {value: 0}, value: new Uint8Array}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, new Uint8Array, 0)
 			newLength++
-			result = await t.context.sendCommand(
-				{listInsert: {name, index: {value: newLength++}, value: new Uint8Array}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.listInsert(name, new Uint8Array, newLength++)
 			for (let i = newLength + 1; i < newLength * 2; i++) {
-				const result = await t.context.sendCommand(
-					{listInsert: {name, index: {value: i}, value: new Uint8Array}},
-					voidResponseType
+				await t.throwsAsync(
+					() => t.context.client.listInsert(name, new Uint8Array, i),
+					ProtoDBError,
+					`Error: Index ${i} is out of bounds in list of size ${length}`
 				)
-				t.deepEqual(result, {
-					error: `Error: Index ${i} is out of bounds in list of size ${newLength}`
-				})
 			}
 		})
 	})

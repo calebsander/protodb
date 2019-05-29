@@ -1,12 +1,6 @@
 import {TestInterface} from 'ava'
 import {TestContext} from '../common'
-import {
-	iterResponseType,
-	optionalBytesResponseType,
-	optionalPairResponseType,
-	sizeResponseType,
-	voidResponseType
-} from '../../pb/request'
+import {ProtoDBError} from '../../client'
 import {concat} from '../../util'
 
 const randomBytes = (n: number) =>
@@ -15,171 +9,100 @@ const randomBytes = (n: number) =>
 export default (test: TestInterface<TestContext>) => {
 	test('hash-small', async t => {
 		const name = 'small'
-		let result = await t.context.sendCommand(
-			{hashCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.hashCreate(name)
 		const data = new Array(20).fill(0).map(_ =>
 			({key: randomBytes(10), value: randomBytes(50)})
 		)
 		await Promise.all(data.map(({key, value}) =>
-			t.context.sendCommand(
-				{hashSet: {name, key, value}},
-				voidResponseType
-			)
-				.then(result => t.deepEqual(result, {}))
+			t.context.client.hashSet(name, key, value)
 		))
-		await Promise.all(data.map(({key, value}) =>
-			t.context.sendCommand(
-				{hashGet: {name, key}},
-				optionalBytesResponseType
-			)
-				.then(result => t.deepEqual(result, {data: value}))
-		))
+		await Promise.all(data.map(async ({key, value}) => {
+			const result = await t.context.client.hashGet(name, key)
+			t.deepEqual(result, value)
+		}))
 		// Test keys that don't match
 		for (let i = 0; i < 20; i++) {
 			if (i === 10) continue
 
-			const result = await t.context.sendCommand(
-				{hashGet: {name, key: randomBytes(i)}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, {none: {}})
+			const result = await t.context.client.hashGet(name, randomBytes(i))
+			t.deepEqual(result, null)
 		}
-		result = await t.context.sendCommand(
-			{hashDrop: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.hashDrop(name)
 	})
 
 	test('hash-large', async t => {
 		const name = 'large'
-		const result = await t.context.sendCommand(
-			{hashCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.hashCreate(name)
 
+		const getKey = (i: number) =>
+			new Uint8Array([...String(i)].map(Number))
 		const getValue = (key: Uint8Array) =>
 			concat(new Array<Uint8Array>(50).fill(key))
 		for (let i = 0; i < 5e3; i++) {
-			const key = new Uint8Array([...String(i)].map(Number))
-			const result = await t.context.sendCommand(
-				{hashSet: {name, key, value: getValue(key)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			const key = getKey(i)
+			await t.context.client.hashSet(name, key, getValue(key))
 		}
-		{
-			const result = await t.context.sendCommand(
-				{hashSize: {name}},
-				sizeResponseType
-			)
-			t.deepEqual(result, {size: 5e3})
-		}
+		let size = await t.context.client.hashSize(name)
+		t.deepEqual(size, 5e3)
 		for (let i = 0; i < 6e3; i++) {
-			const key = new Uint8Array([...String(i)].map(Number))
-			const result = await t.context.sendCommand(
-				{hashGet: {name, key}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, i < 5e3 ? {data: getValue(key)} : {none: {}})
+			const key = getKey(i)
+			const result = await t.context.client.hashGet(name, key)
+			t.deepEqual(result, i < 5e3 ? getValue(key) : null)
 		}
 
 		// Try deleting some keys
 		for (let i = 3e3; i < 6e3; i++) {
-			const key = new Uint8Array([...String(i)].map(Number))
-			const result = await t.context.sendCommand(
-				{hashDelete: {name, key}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.hashDelete(name, getKey(i))
 		}
-		{
-			const result = await t.context.sendCommand(
-				{hashSize: {name}},
-				sizeResponseType
-			)
-			t.deepEqual(result, {size: 3e3})
-		}
+		size = await t.context.client.hashSize(name)
+		t.deepEqual(size, 3e3)
 		for (let i = 0; i < 6e3; i++) {
-			const key = new Uint8Array([...String(i)].map(Number))
-			const result = await t.context.sendCommand(
-				{hashGet: {name, key}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, i < 3e3 ? {data: getValue(key)} : {none: {}})
+			const key = getKey(i)
+			const result = await t.context.client.hashGet(name, key)
+			t.deepEqual(result, i < 3e3 ? getValue(key) : null)
 		}
 	})
 
 	test('hash-overwrite', async t => {
 		const name = 'h'
-		const result = await t.context.sendCommand(
-			{hashCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.hashCreate(name)
 
 		for (let key = 0; key < 1e3; key++) {
-			const result = await t.context.sendCommand(
-				{hashSet: {
-					name,
-					key: new Uint8Array(new Int32Array([key]).buffer),
-					value: new Uint8Array(key).fill(key)}
-				},
-				voidResponseType
+			await t.context.client.hashSet(
+				name,
+				new Uint8Array(new Int32Array([key]).buffer),
+				new Uint8Array(key).fill(key)
 			)
-			t.deepEqual(result, {})
 		}
-		{
-			const result = await t.context.sendCommand(
-				{hashSize: {name}},
-				sizeResponseType
-			)
-			t.deepEqual(result, {size: 1e3})
-		}
+		let size = await t.context.client.hashSize(name)
+		t.deepEqual(size, 1e3)
 
 		for (let key = 0; key < 1e3; key++) {
-			const result = await t.context.sendCommand(
-				{hashSet: {
-					name,
-					key: new Uint8Array(new Int32Array([key << 1]).buffer),
-					value: new Uint8Array(key).fill(key)}
-				},
-				voidResponseType
+			await t.context.client.hashSet(
+				name,
+				new Uint8Array(new Int32Array([key << 1]).buffer),
+				new Uint8Array(key).fill(key)
 			)
-			t.deepEqual(result, {})
 		}
-		{
-			const result = await t.context.sendCommand(
-				{hashSize: {name}},
-				sizeResponseType
-			)
-			t.deepEqual(result, {size: 1500})
-		}
+		size = await t.context.client.hashSize(name)
+		t.deepEqual(size, 1500)
 		for (let key = 0; key < 2e3; key++) {
-			const result = await t.context.sendCommand(
-				{hashGet: {name, key: new Uint8Array(new Int32Array([key]).buffer)}},
-				optionalBytesResponseType
+			const result = await t.context.client.hashGet(
+				name,
+				new Uint8Array(new Int32Array([key]).buffer)
 			)
 			t.deepEqual(
 				result,
 				key & 1
-					? key < 1e3 ? {data: new Uint8Array(key).fill(key)} : {none: {}}
-					: {data: new Uint8Array(key >> 1).fill(key >> 1)}
+					? key < 1e3 ? new Uint8Array(key).fill(key) : null
+					: new Uint8Array(key >> 1).fill(key >> 1)
 			)
 		}
 	})
 
 	test('hash-iter', async t => {
 		const name = 'iterable'
-		let result = await t.context.sendCommand(
-			{hashCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.hashCreate(name)
 
 		const getValue = (key: number) =>
 			concat([Buffer.from('a'.repeat(50)), new Uint8Array([key])])
@@ -187,186 +110,108 @@ export default (test: TestInterface<TestContext>) => {
 		for (let key = 0; key < 100; key++) {
 			const value = getValue(key)
 			values.set(key, value)
-			const result = await t.context.sendCommand(
-				{hashSet: {name, key: new Uint8Array(key), value}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.hashSet(name, new Uint8Array(key), value)
 		}
-		let iter1: Uint8Array, iter2: Uint8Array
-		{
-			let result = await t.context.sendCommand(
-				{hashIter: {name}},
-				iterResponseType
-			)
-			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
-			iter1 = result.iter
+		const iter1 = await t.context.client.hashIter(name)
+		const iter2 = await t.context.client.hashIter(name)
 
-			result = await t.context.sendCommand(
-				{hashIter: {name}},
-				iterResponseType
-			)
-			if ('error' in result) throw new Error(`Iter failed: ${result.error}`)
-			iter2 = result.iter
-		}
-
-		const tryOperations = async () => {
-			let result = await t.context.sendCommand(
-				{hashDrop: {name}},
-				voidResponseType
-			)
-			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
-			result = await t.context.sendCommand(
-				{hashDelete: {name, key: new Uint8Array(3)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
-			result = await t.context.sendCommand(
-				{hashSet: {name, key: new Uint8Array(3), value: new Uint8Array(1)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {error: `Error: Collection ${name} has active iterators`})
-		}
+		const tryOperations = () => Promise.all(
+			[
+				() => t.context.client.hashDrop(name),
+				() => t.context.client.hashDelete(name, new Uint8Array(3)),
+				() => t.context.client.hashSet(name, new Uint8Array(3), new Uint8Array(1))
+			].map(action => t.throwsAsync(
+				action, ProtoDBError, `Error: Collection ${name} has active iterators`
+			))
+		)
 		await tryOperations()
 
 		const iterSeen = new Set<number>()
 		for (let i = 0; i < 50; i++) {
-			const result1 = await t.context.sendCommand(
-				{hashIterNext: {iter: iter1}},
-				optionalPairResponseType
-			)
-			if (!('item' in result1 && result1.item)) throw new Error('Missing item')
-			const {key, value} = result1.item
+			const result1 = await t.context.client.hashIterNext(iter1)
+			if (!result1) throw new Error('Missing item')
+			const {key, value} = result1
 			t.deepEqual(value, values.get(key.length))
-			const result2 = await t.context.sendCommand(
-				{hashIterNext: {iter: iter2}},
-				optionalPairResponseType
-			)
+			const result2 = await t.context.client.hashIterNext(iter2)
 			t.deepEqual(result2, result1) // both iterators should return the same order
 			iterSeen.add(key.length)
 		}
 
 		// Break out of the second iterator
-		result = await t.context.sendCommand(
-			{hashIterBreak: {iter: iter2}},
-			voidResponseType
+		await t.context.client.hashIterBreak(iter2)
+		await t.throwsAsync(
+			() => t.context.client.hashIterBreak(iter2),
+			ProtoDBError, 'Error: Unknown iterator'
 		)
-		t.deepEqual(result, {})
-		result = await t.context.sendCommand(
-			{hashIterBreak: {iter: iter2}},
-			voidResponseType
-		)
-		t.deepEqual(result, {error: 'Error: Unknown iterator'})
 		await tryOperations()
 
 		// Iterate over the rest of the elements with the first iterator
 		for (let i = 0; i < 50; i++) {
-			const result = await t.context.sendCommand(
-				{hashIterNext: {iter: iter1}},
-				optionalPairResponseType
-			)
-			if (!('item' in result && result.item)) throw new Error('Missing item')
-			const {key, value} = result.item
+			const result = await t.context.client.hashIterNext(iter1)
+			if (!result) throw new Error('Missing item')
+			const {key, value} = result
 			t.deepEqual(value, values.get(key.length))
 			iterSeen.add(key.length)
 		}
 		t.deepEqual(iterSeen.size, 100)
-		{
-			const result = await t.context.sendCommand(
-				{hashIterNext: {iter: iter1}},
-				optionalPairResponseType
-			)
-			t.deepEqual(result, {})
-		}
+		const result = await t.context.client.hashIterNext(iter1)
+		t.deepEqual(result, null)
 
 		// Both iterators should now be invalid
 		for (const iter of [iter1, iter2]) {
-			const result = await t.context.sendCommand(
-				{hashIterNext: {iter}},
-				optionalPairResponseType
+			await t.throwsAsync(
+				() => t.context.client.hashIterNext(iter),
+				ProtoDBError, 'Error: Unknown iterator'
 			)
-			t.deepEqual(result, {error: 'Error: Unknown iterator'})
 		}
 	})
 
 	test('hash-check', async t => {
 		const listName = 'lst', undefinedName = 'dne'
-		let result = await t.context.sendCommand(
-			{listCreate: {name: listName}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.listCreate(listName)
 
-		await Promise.all([listName, undefinedName].map(name => {
-			const errorResult = {error: `Error: Collection ${name} is not a hash`}
-			return Promise.all([
-				t.context.sendCommand({hashDrop: {name}}, voidResponseType)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{hashDelete: {name, key: new Uint8Array}},
-					voidResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{hashGet: {name, key: new Uint8Array}},
-					optionalBytesResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand(
-					{hashSet: {name, key: new Uint8Array, value: new Uint8Array}},
-					voidResponseType
-				)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand({hashSize: {name}}, sizeResponseType)
-					.then(result => t.deepEqual(result, errorResult)),
-				t.context.sendCommand({hashIter: {name}}, iterResponseType)
-					.then(result => t.deepEqual(result, errorResult))
-			])
-		}))
+		await Promise.all([listName, undefinedName].map(name =>
+			Promise.all(
+				[
+					() => t.context.client.hashDrop(name),
+					() => t.context.client.hashDelete(name, new Uint8Array),
+					() => t.context.client.hashGet(name, new ArrayBuffer(0)),
+					() => t.context.client.hashSet(name, new Uint8Array, new ArrayBuffer(0)),
+					() => t.context.client.hashSize(name),
+					() => t.context.client.hashIter(name)
+				].map(action => t.throwsAsync(
+					action, ProtoDBError, `Error: Collection ${name} is not a hash`
+				))
+			)
+		))
 
-		result = await t.context.sendCommand(
-			{hashCreate: {name: listName}},
-			voidResponseType
+		await t.throwsAsync(
+			() => t.context.client.hashCreate(listName),
+			ProtoDBError, `Error: Collection ${listName} already exists`
 		)
-		t.deepEqual(result, {error: `Error: Collection ${listName} already exists`})
 
 		const name = 'already_created'
-		result = await t.context.sendCommand({hashCreate: {name}}, voidResponseType)
-		t.deepEqual(result, {})
-		result = await t.context.sendCommand({hashCreate: {name}}, voidResponseType)
-		t.deepEqual(result, {error: `Error: Collection ${name} already exists`})
+		await t.context.client.hashCreate(name)
+		await t.throwsAsync(
+			() => t.context.client.hashCreate(name),
+			ProtoDBError, `Error: Collection ${name} already exists`
+		)
 	})
 
 	test('hash-split-stress', async t => {
 		const name = 'bigg'
-		const result = await t.context.sendCommand(
-			{hashCreate: {name}},
-			voidResponseType
-		)
-		t.deepEqual(result, {})
+		await t.context.client.hashCreate(name)
 
 		const value = (key: number) => new Uint8Array(3000).fill(key)
 		for (let i = 0; i < 256; i++) {
-			const result = await t.context.sendCommand(
-				{hashSet: {name, key: new Uint8Array([i]), value: value(i)}},
-				voidResponseType
-			)
-			t.deepEqual(result, {})
+			await t.context.client.hashSet(name, new Uint8Array([i]), value(i))
 		}
 
 		for (let i = 0; i < 256; i++) {
-			const result = await t.context.sendCommand(
-				{hashGet: {name, key: new Uint8Array([i])}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, {data: value(i)})
+			const result = await t.context.client.hashGet(name, new Uint8Array([i]))
+			t.deepEqual(result, value(i))
 		}
-		{
-			const result = await t.context.sendCommand(
-				{hashGet: {name, key: new Uint8Array(2)}},
-				optionalBytesResponseType
-			)
-			t.deepEqual(result, {none: {}})
-		}
+		const result = await t.context.client.hashGet(name, new Uint8Array(2))
+		t.deepEqual(result, null)
 	})
 }

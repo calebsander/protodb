@@ -259,7 +259,7 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	else {
 		const unreachable: never = command
 		unreachable
-		throw new Error('Unexpected command: ' + inspect(command))
+		throw new Error(`Unexpected command: ${inspect(command)}`)
 	}
 	return writer.finish()
 }

@@ -15,6 +15,7 @@ import {
 	sizeResponseType,
 	voidResponseType
 } from '../pb/request'
+import {concat} from '../util'
 
 const toUint8Array = (buffer: ArrayBuffer | Uint8Array) =>
 	buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
@@ -41,11 +42,11 @@ export class ProtoDBClient {
 		const client: net.Socket = net.connect(this.port, this.host, () =>
 			client.end(commandType.encode(command).finish())
 		)
-		const data = await new Promise<Buffer>((resolve, reject) => {
+		const data = await new Promise<Uint8Array>((resolve, reject) => {
 			const chunks: Buffer[] = []
 			client
 				.on('data', chunk => chunks.push(chunk))
-				.on('end', () => resolve(Buffer.concat(chunks)))
+				.on('end', () => resolve(concat(chunks)))
 				.on('error', reject)
 		})
 		const response = responseType.toObject(
