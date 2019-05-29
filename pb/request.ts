@@ -1,7 +1,7 @@
 import path from 'path'
 import protobuf from 'protobufjs'
 import {Type} from './common'
-import {DB} from './db'
+import {DB, KeyValuePair} from './interface'
 
 const protoFile = protobuf.loadSync(['request.proto', 'db.proto']
 	.map(file => path.join(__dirname, file))
@@ -91,10 +91,6 @@ export type OptionalBytesResponse = BytesResponse | {none: {}}
 export const optionalBytesResponseType =
 	protoFile.lookupType('OptionalBytesResponse') as Type<OptionalBytesResponse>
 
-export interface KeyValuePair {
-	key: Uint8Array
-	value: Uint8Array
-}
 export type OptionalPairResponse = ErrorResponse | {item?: KeyValuePair}
 export const optionalPairResponseType =
 	protoFile.lookupType('OptionalPairResponse') as Type<OptionalPairResponse>

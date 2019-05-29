@@ -4,7 +4,7 @@ import {getCollections} from './collections'
 import * as item from './collections/item'
 import * as hash from './collections/hash'
 import * as list from './collections/list'
-import {Collections} from './pb/db'
+import {Collections} from './pb/interface'
 import {
 	IterParams,
 	NameParams,
@@ -47,7 +47,7 @@ const getIndex = (index: OptionalIndex) =>
 async function runList(): Promise<ListResponse> {
 	let collections: Collections
 	try {
-		collections = await getCollections
+		collections = await getCollections as Collections
 	}
 	catch (e) {
 		return errorToString(e)

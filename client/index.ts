@@ -1,7 +1,7 @@
 import net from 'net'
 import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'
-import {DB} from '../pb/db'
+import {DB, KeyValuePair} from '../pb/interface'
 import {
 	bytesResponseType,
 	Command,
@@ -9,7 +9,6 @@ import {
 	ErrorResponse,
 	iterResponseType,
 	listResponseType,
-	KeyValuePair,
 	optionalBytesResponseType,
 	optionalPairResponseType,
 	sizeResponseType,
