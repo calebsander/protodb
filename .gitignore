@@ -1,6 +1,5 @@
 .nyc_output
 coverage
-build
 data
 dist
 node_modules

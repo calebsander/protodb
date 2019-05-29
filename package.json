@@ -7,7 +7,7 @@
 	"bin": "dist/main.js",
 	"scripts": {
 		"build-ts": "rm -rf dist && tsc && tsc -p client && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
-		"build-napi": "node-gyp rebuild && mkdir -p dist && cp build/Release/mmap.node dist/mmap-wrapper.node",
+		"build-napi": "node-gyp rebuild && mkdir -p dist && mv build/Release/mmap.node dist/mmap-wrapper.node && rm -r build",
 		"build": "npm run build-ts && npm run build-napi",
 		"prepack": "npm run build-ts",
 		"install": "npm run build-napi",
@@ -15,7 +15,10 @@
 	},
 	"files": [
 		"binding.gyp",
-		"dist",
+		"dist/**/*.js",
+		"dist/pb/*.proto",
+		"dist/client/index.d.ts",
+		"dist/pb/interface.d.ts",
 		"mmap-wrapper/mmap.c"
 	],
 	"author": "Caleb Sander",
