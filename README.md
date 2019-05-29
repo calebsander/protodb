@@ -26,14 +26,33 @@ message ValueType {
 }
 ```
 Using `protoDB`, we can create a hash map with these keys and values:
-```
-hashCreate users
-hashSet users users.proto {"userId":1234} {"firstName":"Qwerty","lastName":"Uiop","age":30}
-hashGet users users.proto {"userId":1234}
+```ts
+import protobufjs from 'protobufjs'
+import {ProtoDBClient} from 'protodb'
+
+async function main() {
+  const types = await protobufjs.load('users.proto')
+  const KeyType = types.lookupType('KeyType'),
+        ValueType = types.lookupType('ValueType')
+
+  const client = new ProtoDBClient
+  await client.hashCreate('users')
+  const key = KeyType.encode({userId: 1234}).finish()
+  const value = ValueType.encode({
+    firstName: 'Qwerty',
+    lastName: 'Uiop',
+    age: 30
+  }).finish()
+  await client.hashSet('users', key, value)
+  const retrieved = await client.hashGet('users', key)
+  console.log(ValueType.decode(retrieved))
+}
+
+main()
 ```
 And it will retrieve the corresponding value:
 ```
-{ firstName: 'Qwerty', lastName: 'Uiop', age: 30 }
+ValueType { firstName: 'Qwerty', lastName: 'Uiop', age: 30 }
 ```
 
 ## Motivation
@@ -75,11 +94,64 @@ Can be used as a queue, stack, or deque.
 
 All data structures have corresponding `create` and `drop` commands, e.g. `itemCreate` and `itemDrop`.
 
+## Running the database
+
+Once version `1.0.0` is released, you will be able to install this package from npm: `npm install protodb`.
+The package includes both the database implementation and a client interface for it.
+To run the database, simply execute `protodb` from an npm script, or run `node_modules/.bin/protodb` in a terminal.
+By default, the database will store its files in a `data` folder in the current directory and listen on port 9000.
+You can configure these from the command line (run `protodb --help` for details).
+
 ## API
 
 Commands are issued by sending protocol buffers to the TCP server hosted by `protoDB`.
 Responses are also sent as protocol buffers across the TCP socket.
 The protocol buffer types defining requests and responses are in [`pb/request.ts`](pb/request.ts).
-[`test/client.ts`](test/client.ts) implements a basic command prompt that wraps this binary API.
-See [the example](#example) above which uses this text interface.
-An exported interface allowing other libraries to issue commands to `protoDB` is coming soon.
+The npm package exports a client interface that wraps the TCP protocol.
+See [the example](#example) above which uses this interface.
+The interface allows you to connect to a `protoDB` database on any host (default `localhost`) and port (default 9000), which are passed to the `ProtoDBClient` constructor.
+The `ProtoDBClient` object has a method corresponding to each `protoDB` command:
+```ts
+class ProtoDBClient {
+  constructor(port?: number, host?: string)
+
+  list(): Promise<DB>
+
+  itemCreate(name: string): Promise<void>
+  itemDrop(name: string): Promise<void>
+  itemGet(name: string): Promise<Uint8Array>
+  itemSet(name: string, value: ArrayBuffer | Uint8Array): Promise<void>
+
+  hashCreate(name: string): Promise<void>
+  hashDrop(name: string): Promise<void>
+  hashDelete(name: string, key: ArrayBuffer | Uint8Array): Promise<void>
+  hashGet(name: string, key: ArrayBuffer | Uint8Array): Promise<Uint8Array | null>
+  hashSet(name: string, key: ArrayBuffer | Uint8Array, value: ArrayBuffer | Uint8Array): Promise<void>
+  hashSize(name: string): Promise<number>
+  hashIter(name: string): Promise<Uint8Array>
+  hashIterBreak(iter: Uint8Array): Promise<void>
+  hashIterNext(iter: Uint8Array): Promise<KeyValuePair | null>
+
+  listCreate(name: string): Promise<void>
+  listDrop(name: string): Promise<void>
+  listDelete(name: string, index?: number): Promise<void>
+  listGet(name: string, index: number): Promise<Uint8Array>
+  listInsert(name: string, value: ArrayBuffer | Uint8Array, index?: number): Promise<void>
+  listSet(name: string, index: number, value: ArrayBuffer | Uint8Array): Promise<void>
+  listSize(name: string): Promise<number>
+  listIter(name: string, start?: number, end?: number): Promise<Uint8Array>
+  listIterBreak(iter: Uint8Array): Promise<void>
+  listIterNext(iter: Uint8Array): Promise<Uint8Array | null>
+}
+```
+If the server reports an error when executing a command, it will cause the `Promise` to reject with a `ProtoDBError`.
+The `ProtoDBError` constructor is also exported from the npm package.
+
+The client is written in TypeScript and exports typings so it can be used from a TypeScript project.
+It can also be used in Node.js without TypeScript:
+```js
+const {ProtoDBClient, ProtoDBError} = require('protodb')
+
+const client = new ProtoDBClient
+// ...
+```
