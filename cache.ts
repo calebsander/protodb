@@ -1,20 +1,14 @@
-import fs from 'fs'
+import {promises as fs} from 'fs'
 import {promisify} from 'util'
 import {LOG_PAGE_SIZE, PAGE_SIZE, mmap} from './mmap-wrapper'
 
 export {PAGE_SIZE}
 
-const close = promisify(fs.close),
-      open = promisify(fs.open),
-      stat = promisify(fs.fstat),
-      truncate = promisify(fs.ftruncate),
-      unlink = promisify(fs.unlink),
-      writeFile = promisify(fs.writeFile),
-      mmapPromise = promisify(mmap)
+const mmapPromise = promisify(mmap)
 
 interface FilePageCache {
 	pages: Map<number, Promise<ArrayBuffer>>
-	fd: number
+	fd: fs.FileHandle
 }
 interface PageCache {
 	[file: string]: Promise<FilePageCache> | undefined
@@ -28,7 +22,7 @@ function getFileCache(file: string, create = false): Promise<FilePageCache> {
 
 	return cache[file] = (async () => {
 		try {
-			const fd = await open(file, create ? 'a+' : 'r+')
+			const fd = await fs.open(file, create ? 'a+' : 'r+')
 			return {pages: new Map, fd}
 		}
 		catch (e) {
@@ -41,7 +35,7 @@ async function loadPage(file: string, page: number): Promise<ArrayBuffer> {
 	const {pages, fd} = await getFileCache(file)
 	let pagePromise = pages.get(page)
 	if (!pagePromise) {
-		pages.set(page, pagePromise = mmapPromise(fd, page << LOG_PAGE_SIZE))
+		pages.set(page, pagePromise = mmapPromise(fd.fd, page << LOG_PAGE_SIZE))
 	}
 	return pagePromise
 }
@@ -61,24 +55,24 @@ export class FilePage {
 }
 
 export const createFile = (file: string): Promise<void> =>
-	writeFile(file, '', {flag: 'wx'})
+	fs.writeFile(file, '', {flag: 'wx'})
 export async function setPageCount(file: string, pages: number): Promise<void> {
 	const {fd} = await getFileCache(file)
-	return truncate(fd, pages << LOG_PAGE_SIZE)
+	return fd.truncate(pages << LOG_PAGE_SIZE)
 }
 export async function removeFile(file: string): Promise<void> {
-	const promises = [unlink(file)]
+	const promises = [fs.unlink(file)]
 	const fileCache = cache[file]
 	if (fileCache) {
 		delete cache[file]
 		const {fd} = await fileCache
-		promises.push(close(fd))
+		promises.push(fd.close())
 	}
 	await Promise.all(promises)
 }
 export async function getPageCount(file: string): Promise<number> {
 	const {fd} = await getFileCache(file)
-	const {size} = await stat(fd)
+	const {size} = await fd.stat()
 	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
 	return getPageNo(size)
 }
@@ -166,7 +160,7 @@ export async function shutdown(): Promise<void> {
 	for (const file in cache) {
 		const {pages, fd} = await cache[file]!
 		pages.clear()
-		closePromises.push(close(fd))
+		closePromises.push(fd.close())
 	}
 	await Promise.all(closePromises)
 }

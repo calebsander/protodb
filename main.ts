@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 
-import fs from 'fs'
+import {promises as fs} from 'fs'
 import net from 'net'
-import {promisify} from 'util'
 import {dataDir, port} from './args'
 import {shutdown} from './cache'
 import {executeCommand} from './command-processor'
 import {concat} from './util'
 
 const initDB = (): Promise<void> =>
-	promisify(fs.mkdir)(dataDir)
-		.catch(_ => {}) // not a problem if it already exists
+	fs.mkdir(dataDir).catch(_ => {}) // not a problem if it already exists
 
 async function cleanup(): Promise<void> {
 	try {

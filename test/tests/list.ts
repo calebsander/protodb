@@ -1,28 +1,21 @@
-import fs from 'fs'
-import {promisify} from 'util'
+import {promises as fs} from 'fs'
 import {TestInterface} from 'ava'
 import {TestContext} from '../common'
 import {ProtoDBError} from '../../client'
 import {PAGE_SIZE} from '../../mmap-wrapper'
 import {FREE_LIST_END, freePageType, headerType, nodeType} from '../../pb/list'
 
-const close = promisify(fs.close),
-      fstat = promisify(fs.fstat),
-      open = promisify(fs.open),
-      read = promisify(fs.read),
-      stat = promisify(fs.stat)
-
 async function getDepth(context: TestContext, name: string): Promise<number> {
-	const fd = await open(context.getFile(`${name}.list`), 'r')
+	const fd = await fs.open(context.getFile(`${name}.list`), 'r')
 	const pageBuffer = new Uint8Array(PAGE_SIZE)
-	await read(fd, pageBuffer, 0, PAGE_SIZE, 0)
+	await fd.read(pageBuffer, 0, PAGE_SIZE, 0)
 	let {page} = headerType.toObject(
 		headerType.decodeDelimited(pageBuffer),
 		{longs: Number}
 	).child
 	let depth = 0
 	while (true) {
-		await read(fd, pageBuffer, 0, PAGE_SIZE, page * PAGE_SIZE)
+		await fd.read(pageBuffer, 0, PAGE_SIZE, page * PAGE_SIZE)
 		const node = nodeType.toObject(
 			nodeType.decodeDelimited(pageBuffer),
 			{defaults: true, longs: Number}
@@ -32,33 +25,33 @@ async function getDepth(context: TestContext, name: string): Promise<number> {
 		[{page}] = node.inner.children
 		depth++
 	}
-	await close(fd)
+	await fd.close()
 	return depth
 }
 
 async function getPagesInUse(context: TestContext, name: string): Promise<number> {
-	const fd = await open(context.getFile(`${name}.list`), 'r')
+	const fd = await fs.open(context.getFile(`${name}.list`), 'r')
 	const totalPages = async () => {
-		const {size} = await fstat(fd)
+		const {size} = await fd.stat()
 		return size / PAGE_SIZE
 	}
 	const freeListLength = async () => {
 		const pageBuffer = new Uint8Array(PAGE_SIZE)
-		await read(fd, pageBuffer, 0, PAGE_SIZE, 0)
+		await fd.read(pageBuffer, 0, PAGE_SIZE, 0)
 		let {next} = headerType.toObject(
 			headerType.decodeDelimited(pageBuffer),
 			{longs: Number}
 		).freePage
 		let length = 0
 		while (next !== FREE_LIST_END) {
-			await read(fd, pageBuffer, 0, PAGE_SIZE, next * PAGE_SIZE)
+			await fd.read(pageBuffer, 0, PAGE_SIZE, next * PAGE_SIZE)
 			;({next} = freePageType.toObject(freePageType.decodeDelimited(pageBuffer)))
 			length++
 		}
 		return length
 	}
 	const [pages, freePages] = await Promise.all([totalPages(), freeListLength()])
-	await close(fd)
+	await fd.close()
 	return pages - freePages
 }
 
@@ -140,7 +133,7 @@ export default (test: TestInterface<TestContext>) => {
 		}
 		t.deepEqual(await getDepth(t.context, name), 1)
 		t.deepEqual(await getPagesInUse(t.context, name), 10)
-		const {size} = await stat(t.context.getFile(`${name}.list`))
+		const {size} = await fs.stat(t.context.getFile(`${name}.list`))
 
 		// Randomly remove the elements
 		for (let i = 1e3; i > 0; i--) {
@@ -166,7 +159,7 @@ export default (test: TestInterface<TestContext>) => {
 		}
 		t.deepEqual(await getDepth(t.context, name), 0)
 		t.deepEqual(await getPagesInUse(t.context, name), 2)
-		const newStat = await stat(t.context.getFile(`${name}.list`))
+		const newStat = await fs.stat(t.context.getFile(`${name}.list`))
 		t.deepEqual(newStat.size, size)
 	})
 
