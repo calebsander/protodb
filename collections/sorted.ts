@@ -2,12 +2,10 @@ import path from 'path'
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {createFile, FilePage, removeFile, setPageCount} from '../cache'
-import {CollectionType} from '../pb/interface'
+import {CollectionType, Key, KeyElement} from '../pb/interface'
 import {
 	Header,
 	headerType,
-	Key,
-	KeyElement,
 	LIST_END,
 	Node,
 	nodeType

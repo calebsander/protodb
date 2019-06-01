@@ -1,8 +1,7 @@
 import path = require('path')
 import protobuf = require('protobufjs')
 import {Type} from './common'
-import {DB, KeyValuePair} from './interface'
-import {Key} from './sorted'
+import {DB, KeyElement, KeyValuePair} from './interface'
 
 const protoFile = protobuf.loadSync(
 	['request.proto', 'db.proto', 'sorted.proto']
@@ -43,7 +42,7 @@ export interface NameRangeParams extends NameParams {
 	end: OptionalIndex
 }
 export interface NameSortedKeyParams extends NameParams {
-	key: Key
+	key: KeyElement[]
 }
 export interface NameSortedKeyValueParams extends NameSortedKeyParams {
 	value: Uint8Array

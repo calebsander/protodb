@@ -1,6 +1,7 @@
 import path from 'path'
 import protobuf from 'protobufjs'
 import {Type} from './common'
+import {Key} from './interface'
 
 const protoFile = protobuf.loadSync(path.join(__dirname, 'sorted.proto'))
 
@@ -16,15 +17,6 @@ export interface Header {
 	freePage: FreePage
 }
 export const headerType = protoFile.lookupType('Header') as Type<Header>
-
-export type KeyElement
-	= {int: number}
-	| {float: number}
-	| {string: string}
-	| {uniquifier: number}
-export interface Key {
-	elements: KeyElement[]
-}
 
 export interface InnerNode {
 	keys: Key[]

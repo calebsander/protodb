@@ -313,7 +313,7 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name key typeFile`)
 					}
 					[bytesType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {name, key: {elements: JSON.parse(key)}}}
+					command = {[type]: {name, key: JSON.parse(key)}}
 					responseType = bytesListResponseType
 					break
 				}
@@ -325,7 +325,7 @@ async function processCommands() {
 					const [valueType] = await lookupType(typeFile, 'Type')
 					command = {[type]: {
 						name,
-						key: {elements: JSON.parse(key)},
+						key: JSON.parse(key),
 						value: valueType.encode(JSON.parse(value)).finish()
 					}}
 					responseType = voidResponseType

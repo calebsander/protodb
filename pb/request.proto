@@ -66,11 +66,11 @@ message NameRangeParams {
 }
 message NameSortedKeyParams {
 	string name = 1;
-	Key key = 2;
+	repeated KeyElement key = 2;
 }
 message NameSortedKeyValueParams {
 	string name = 1;
-	Key key = 2;
+	repeated KeyElement key = 2;
 	bytes value = 3;
 }
 message NameKeyRangeParams {

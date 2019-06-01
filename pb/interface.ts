@@ -15,3 +15,12 @@ export interface KeyValuePair {
 	key: Uint8Array
 	value: Uint8Array
 }
+
+export type KeyElement
+	= {int: number}
+	| {float: number}
+	| {string: string}
+	| {uniquifier: number}
+export interface Key {
+	elements: KeyElement[]
+}

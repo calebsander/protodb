@@ -194,12 +194,12 @@ const runSortedDrop =
 			.catch(errorToString)
 const runSortedGet =
 	({name, key}: NameSortedKeyParams): Promise<BytesListResponse> =>
-		sorted.get(name, key)
+		sorted.get(name, {elements: key})
 			.then(values => ({values: {values}}))
 			.catch(errorToString)
 const runSortedInsert =
 	({name, key, value}: NameSortedKeyValueParams): Promise<VoidResponse> =>
-		sorted.insert(name, key, value)
+		sorted.insert(name, {elements: key}, value)
 			.then(_ => ({}))
 			.catch(errorToString)
 
