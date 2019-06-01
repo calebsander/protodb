@@ -4,6 +4,7 @@ import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
 import {Iterators} from '../iterator'
+import {CollectionType} from '../pb/interface'
 import {
 	FREE_LIST_END,
 	freePageType,
@@ -13,18 +14,16 @@ import {
 	nodeType
 } from '../pb/list'
 
-const COLLECTION_TYPE = 'list'
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
 const MIN_NODE_LENGTH = PAGE_SIZE >> 1
 
-const filename = (name: string) =>
-	path.join(dataDir, `${name}.${COLLECTION_TYPE}`)
+const filename = (name: string) => path.join(dataDir, `${name}.list`)
 
 async function checkIsList(name: string): Promise<void> {
 	const collections = await getCollections
 	const collection = collections[name]
-	if (!(collection && COLLECTION_TYPE in collection)) {
+	if (collection !== CollectionType.LIST) {
 		throw new Error(`Collection ${name} is not a list`)
 	}
 }
@@ -319,7 +318,7 @@ async function* listEntries(
 const iterators = new Iterators<AsyncIterator<Uint8Array>>()
 
 export async function create(name: string): Promise<void> {
-	await addCollection(name, {[COLLECTION_TYPE]: {}})
+	await addCollection(name, CollectionType.LIST)
 	const file = filename(name)
 	await createFile(file)
 	await setPageCount(file, 2)

@@ -8,10 +8,12 @@ import {Type} from '../pb/common'
 import {
 	Command,
 	commandType,
+	BytesListResponse,
 	IterResponse,
 	OptionalBytesResponse,
 	OptionalPairResponse,
 	bytesResponseType,
+	bytesListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
@@ -291,6 +293,44 @@ async function processCommands() {
 					responseType = optionalBytesResponseType
 					break
 				}
+				case 'sortedCreate': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {[type]: {name}}
+					responseType = voidResponseType
+					break
+				}
+				case 'sortedDrop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					command = {[type]: {name}}
+					responseType = voidResponseType
+					break
+				}
+				case 'sortedGet': {
+					const [name, key, typeFile] = args.slice(1) as (string | undefined)[]
+					if (!(name && key && typeFile)) {
+						throw new Error(`Syntax: ${type} name key typeFile`)
+					}
+					[bytesType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {name, key: {elements: JSON.parse(key)}}}
+					responseType = bytesListResponseType
+					break
+				}
+				case 'sortedInsert': {
+					const [name, key, typeFile, value] = args.slice(1) as (string | undefined)[]
+					if (!(name && key && typeFile && value)) {
+						throw new Error(`Syntax: ${type} name key typeFile value`)
+					}
+					const [valueType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {
+						name,
+						key: {elements: JSON.parse(key)},
+						value: valueType.encode(JSON.parse(value)).finish()
+					}}
+					responseType = voidResponseType
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}
@@ -318,7 +358,15 @@ async function processCommands() {
 							const bytesResponse: OptionalBytesResponse = response
 							if (!('none' in bytesResponse) && 'data' in bytesResponse) {
 								response = bytesType.toObject(
-									bytesType.decode(bytesResponse.data || new Uint8Array)
+									bytesType.decode(bytesResponse.data)
+								)
+							}
+							break
+						case bytesListResponseType:
+							const valuesResponse: BytesListResponse = response
+							if ('values' in valuesResponse) {
+								response = valuesResponse.values.values.map(value =>
+									bytesType.toObject(bytesType.decode(value))
 								)
 							}
 							break

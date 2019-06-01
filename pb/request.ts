@@ -2,9 +2,11 @@ import path = require('path')
 import protobuf = require('protobufjs')
 import {Type} from './common'
 import {DB, KeyValuePair} from './interface'
+import {Key} from './sorted'
 
-const protoFile = protobuf.loadSync(['request.proto', 'db.proto']
-	.map(file => path.join(__dirname, file))
+const protoFile = protobuf.loadSync(
+	['request.proto', 'db.proto', 'sorted.proto']
+		.map(file => path.join(__dirname, file))
 )
 
 export type OptionalIndex = {none: {}} | {value: number}
@@ -40,6 +42,12 @@ export interface NameRangeParams extends NameParams {
 	start: OptionalIndex
 	end: OptionalIndex
 }
+export interface NameSortedKeyParams extends NameParams {
+	key: Key
+}
+export interface NameSortedKeyValueParams extends NameSortedKeyParams {
+	value: Uint8Array
+}
 export type Command
 	= {list: {}}
 
@@ -68,6 +76,11 @@ export type Command
 	| {listIter: NameRangeParams}
 	| {listIterBreak: IterParams}
 	| {listIterNext: IterParams}
+
+	| {sortedCreate: NameParams}
+	| {sortedDrop: NameParams}
+	| {sortedGet: NameSortedKeyParams}
+	| {sortedInsert: NameSortedKeyValueParams}
 export const commandType = protoFile.lookupType('Command') as Type<Command>
 
 export interface ErrorResponse {
@@ -77,6 +90,13 @@ export interface ErrorResponse {
 export type BytesResponse = ErrorResponse | {data: Uint8Array}
 export const bytesResponseType =
 	protoFile.lookupType('BytesResponse') as Type<BytesResponse>
+
+export interface ValuesList {
+	values: Uint8Array[]
+}
+export type BytesListResponse = ErrorResponse | {values: ValuesList}
+export const bytesListResponseType =
+	protoFile.lookupType('BytesListResponse') as Type<BytesListResponse>
 
 export type IterResponse = ErrorResponse | {iter: Uint8Array}
 export const iterResponseType =

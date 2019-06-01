@@ -2,23 +2,21 @@ import path = require('path')
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {getFile, removeFile, setFile} from '../cache'
+import {CollectionType} from '../pb/interface'
 import {itemType} from '../pb/item'
 
-const COLLECTION_TYPE = 'item'
-
-const filename = (name: string) =>
-	path.join(dataDir, `${name}.${COLLECTION_TYPE}`)
+const filename = (name: string) => path.join(dataDir, `${name}.item`)
 
 async function checkIsItem(name: string): Promise<void> {
 	const collections = await getCollections
 	const collection = collections[name]
-	if (!(collection && COLLECTION_TYPE in collection)) {
+	if (collection !== CollectionType.ITEM) {
 		throw new Error(`Collection ${name} is not an item`)
 	}
 }
 
 export function create(name: string): Promise<void> {
-	return addCollection(name, {[COLLECTION_TYPE]: {}})
+	return addCollection(name, CollectionType.ITEM)
 }
 
 export async function drop(name: string): Promise<void> {

@@ -1,7 +1,9 @@
-export type CollectionType
-	= {item: {}}
-	| {hash: {}}
-	| {list: {}}
+export enum CollectionType {
+	ITEM,
+	HASH,
+	LIST,
+	SORTED
+}
 export interface Collections {
 	[name: string]: CollectionType
 }

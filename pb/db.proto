@@ -1,13 +1,10 @@
 syntax = "proto3";
 
-message EmptyType {}
-
-message CollectionType {
-	oneof type {
-		EmptyType item = 1;
-		EmptyType hash = 2;
-		EmptyType list = 3;
-	}
+enum CollectionType {
+	ITEM = 0;
+	HASH = 1;
+	LIST = 2;
+	SORTED = 3;
 }
 
 message DB {

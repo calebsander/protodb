@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+message FreePage {
+	uint32 next = 1;
+}
+
+message Header {
+	uint32 root = 1;
+	uint64 size = 2;
+	FreePage freePage = 3;
+}
+
+message KeyElement {
+	oneof element {
+		sint32 int = 1;
+		float float = 2;
+		string string = 3;
+		uint64 uniquifier = 4;
+	}
+}
+message Key {
+	repeated KeyElement elements = 1;
+}
+
+message InnerNode {
+	repeated Key keys = 1;
+	repeated uint32 children = 2;
+}
+message LeafNode {
+	repeated Key keys = 1;
+	repeated bytes values = 2;
+	uint32 next = 3;
+}
+message Node {
+	oneof type {
+		InnerNode inner = 1;
+		LeafNode leaf = 2;
+	}
+}

@@ -4,6 +4,7 @@ import {getCollections} from './collections'
 import * as item from './collections/item'
 import * as hash from './collections/hash'
 import * as list from './collections/list'
+import * as sorted from './collections/sorted'
 import {Collections} from './pb/interface'
 import {
 	IterParams,
@@ -15,9 +16,12 @@ import {
 	NameOptionalIndexParams,
 	NameOptionalIndexValueParams,
 	NameRangeParams,
+	NameSortedKeyParams,
+	NameSortedKeyValueParams,
 	NameValueParams,
 	OptionalIndex,
 	BytesResponse,
+	BytesListResponse,
 	ErrorResponse,
 	IterResponse,
 	ListResponse,
@@ -27,6 +31,7 @@ import {
 	VoidResponse,
 	commandType,
 	bytesResponseType,
+	bytesListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
@@ -177,6 +182,26 @@ const runListIterNext =
 		list.iterNext(iter)
 			.then(data => data ? {data} : {none: {}})
 			.catch(errorToString)
+const runSortedCreate =
+	({name}: NameParams): Promise<VoidResponse> =>
+		sorted.create(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runSortedDrop =
+	({name}: NameParams): Promise<VoidResponse> =>
+		sorted.drop(name)
+			.then(_ => ({}))
+			.catch(errorToString)
+const runSortedGet =
+	({name, key}: NameSortedKeyParams): Promise<BytesListResponse> =>
+		sorted.get(name, key)
+			.then(values => ({values: {values}}))
+			.catch(errorToString)
+const runSortedInsert =
+	({name, key, value}: NameSortedKeyValueParams): Promise<VoidResponse> =>
+		sorted.insert(name, key, value)
+			.then(_ => ({}))
+			.catch(errorToString)
 
 async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	const command = commandType.toObject(
@@ -255,6 +280,18 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	}
 	else if ('listIterNext' in command) {
 		writer = optionalBytesResponseType.encode(await runListIterNext(command.listIterNext))
+	}
+	else if ('sortedCreate' in command) {
+		writer = voidResponseType.encode(await runSortedCreate(command.sortedCreate))
+	}
+	else if ('sortedDrop' in command) {
+		writer = voidResponseType.encode(await runSortedDrop(command.sortedDrop))
+	}
+	else if ('sortedGet' in command) {
+		writer = bytesListResponseType.encode(await runSortedGet(command.sortedGet))
+	}
+	else if ('sortedInsert' in command) {
+		writer = voidResponseType.encode(await runSortedInsert(command.sortedInsert))
 	}
 	else {
 		const unreachable: never = command

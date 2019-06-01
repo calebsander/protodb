@@ -23,12 +23,12 @@ import {
 	Header,
 	headerType
 } from '../pb/hash'
+import {CollectionType} from '../pb/interface'
 
-const COLLECTION_TYPE = 'hash'
 const INITIAL_DEPTH = 0
 
 const filename = (name: string, fileType: string) =>
-	path.join(dataDir, `${name}.${COLLECTION_TYPE}.${fileType}`)
+	path.join(dataDir, `${name}.hash.${fileType}`)
 const directoryFilename = (name: string) => filename(name, 'directory')
 const bucketsFilename = (name: string) => filename(name, 'buckets')
 
@@ -48,7 +48,7 @@ const depthHash = (hash: number, depth: number): number =>
 async function checkIsHash(name: string): Promise<void> {
 	const collections = await getCollections
 	const collection = collections[name]
-	if (!(collection && COLLECTION_TYPE in collection)) {
+	if (collection !== CollectionType.HASH) {
 		throw new Error(`Collection ${name} is not a hash`)
 	}
 }
@@ -193,7 +193,7 @@ async function* hashEntries(name: string): AsyncIterator<BucketItem> {
 const iterators = new Iterators<AsyncIterator<BucketItem>>()
 
 export async function create(name: string): Promise<void> {
-	await addCollection(name, {[COLLECTION_TYPE]: {}})
+	await addCollection(name, CollectionType.HASH)
 	const initDirectory = async () => {
 		const directoryFile = directoryFilename(name)
 		await createFile(directoryFile)
