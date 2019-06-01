@@ -1,5 +1,5 @@
-import path from 'path'
-import protobuf from 'protobufjs'
+import path = require('path')
+import protobuf = require('protobufjs')
 import {Type} from './common'
 import {Key} from './interface'
 
