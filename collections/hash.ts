@@ -1,5 +1,5 @@
 import {createHash} from 'crypto'
-import path from 'path'
+import path = require('path')
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {

@@ -1,4 +1,4 @@
-import yargs from 'yargs'
+import yargs = require('yargs')
 import {DEFAULT_DATA_DIR, DEFAULT_PORT} from './constants'
 
 export const {dataDir, port} = yargs.options({

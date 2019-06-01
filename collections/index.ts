@@ -1,4 +1,4 @@
-import path from 'path'
+import path = require('path')
 import {dataDir} from '../args'
 import {getFile, setFile} from '../cache'
 import {dbType} from '../pb/db'

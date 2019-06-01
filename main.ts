@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import {promises as fs} from 'fs'
-import net from 'net'
+import net = require('net')
 import {dataDir, port} from './args'
 import {shutdown} from './cache'
 import {executeCommand} from './command-processor'

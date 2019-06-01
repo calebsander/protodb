@@ -1,4 +1,4 @@
-import net from 'net'
+import net = require('net')
 import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'
 import {DB, KeyValuePair} from '../pb/interface'

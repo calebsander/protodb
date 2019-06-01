@@ -1,4 +1,4 @@
-import path from 'path'
+import path = require('path')
 import {Reader} from 'protobufjs'
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'

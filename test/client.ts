@@ -1,10 +1,8 @@
-#!/usr/bin/env node
-
-import net from 'net'
-import readline from 'readline'
+import net = require('net')
+import readline = require('readline')
 import {inspect} from 'util'
-import protobuf from 'protobufjs'
-import yargs from 'yargs'
+import protobuf = require('protobufjs')
+import yargs = require('yargs')
 import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'
 import {

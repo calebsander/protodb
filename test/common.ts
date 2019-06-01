@@ -1,6 +1,6 @@
 import {exec, spawn} from 'child_process'
-import path from 'path'
-import readline from 'readline'
+import path = require('path')
+import readline = require('readline')
 import {promisify} from 'util'
 import {ProtoDBClient} from '../client'
 import {DEFAULT_PORT} from '../constants'

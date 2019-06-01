@@ -1,8 +1,8 @@
-import crypto from 'crypto'
+import {randomBytes} from 'crypto'
 import {promisify} from 'util'
 import {ITER_BYTE_LENGTH} from './constants'
 
-const randomBytes = promisify(crypto.randomBytes)
+const randomBytesPromise = promisify(randomBytes)
 
 const getKey = (iter: Uint8Array): string =>
 	Buffer.from(iter).toString('hex')
@@ -18,7 +18,7 @@ export class Iterators<STATE> {
 
 	async registerIterator(name: string, iterator: STATE): Promise<Uint8Array> {
 		this.iteratorCounts.set(name, (this.iteratorCounts.get(name) || 0) + 1)
-		const iter = await randomBytes(ITER_BYTE_LENGTH)
+		const iter = await randomBytesPromise(ITER_BYTE_LENGTH)
 		this.iterators.set(getKey(iter), {name, iterator})
 		return iter
 	}
