@@ -9,3 +9,9 @@ export function concat(buffers: Uint8Array[]): Uint8Array {
 	}
 	return result
 }
+
+export function ensureOverflowError(e: Error) {
+	if (!(e instanceof RangeError && e.message === 'Source is too large')) {
+		throw e // unexpected error; rethrow it
+	}
+}

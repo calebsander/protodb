@@ -13,6 +13,7 @@ import {
 	Node,
 	nodeType
 } from '../pb/list'
+import {ensureOverflowError} from '../util'
 
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
@@ -123,13 +124,13 @@ function concat<T>(arr: T[], other: T[], left: boolean): void {
 	else arr.push(...other)
 }
 
-const nodeSize = (node: Node) =>
+const nodeSize = (node: Node): number =>
 	'inner' in node
 		? node.inner.children.reduce((totalSize, {size}) => totalSize + size, 0)
 		: node.leaf.values.length
 
 function getParent(path: PathItem[]) {
-	const [parent]: (PathItem | undefined)[] = path.slice(-1)
+	const [parent] = path.slice(-1) as (PathItem | undefined)[]
 	if (!parent) return undefined
 
 	const {node: parentNode, index} = parent
@@ -157,9 +158,7 @@ async function saveWithOverflow(name: string, path: PathItem[], insert: boolean)
 		}
 		catch (e) {
 			// Node overflowed
-			if (!(e instanceof RangeError && e.message === 'Source is too large')) {
-				throw e // unexpected error; rethrow it
-			}
+			ensureOverflowError(e)
 
 			// TODO: this doesn't split leaves evenly
 			const newNode: Node = 'inner' in node
@@ -180,12 +179,11 @@ async function saveWithOverflow(name: string, path: PathItem[], insert: boolean)
 				parent.children.splice(parent.index, 1, ...children)
 			}
 			else { // splitting the root node
-				const makeNewRoot = async () => {
+				promises.push((async () => {
 					const rootPage = await getFreePage(name, header)
 					header.child.page = rootPage
 					await setNode(name, rootPage, {inner: {children}})
-				}
-				promises.push(makeNewRoot())
+				})())
 			}
 			await Promise.all(promises)
 		}

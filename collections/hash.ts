@@ -24,6 +24,7 @@ import {
 	headerType
 } from '../pb/hash'
 import {CollectionType} from '../pb/interface'
+import {ensureOverflowError} from '../util'
 
 const INITIAL_DEPTH = 0
 
@@ -108,12 +109,6 @@ async function extendDirectory(name: string, header: Header): Promise<void> {
 	)
 	header.depth = depth + 1
 	await Promise.all([doubleDirectory, setHeader(name, header)])
-}
-
-function ensureOverflowError(e: Error) {
-	if (!(e instanceof RangeError && e.message === 'Source is too large')) {
-		throw e // unexpected error; rethrow it
-	}
 }
 
 async function splitBucket(

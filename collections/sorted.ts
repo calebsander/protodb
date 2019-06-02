@@ -1,15 +1,17 @@
 import path = require('path')
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
-import {createFile, FilePage, removeFile, setPageCount} from '../cache'
+import {createFile, FilePage, getPageCount, removeFile, setPageCount} from '../cache'
 import {CollectionType, Key, KeyElement} from '../pb/interface'
 import {
+	freePageType,
 	Header,
 	headerType,
 	LIST_END,
 	Node,
 	nodeType
 } from '../pb/sorted'
+import {ensureOverflowError} from '../util'
 
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
@@ -58,6 +60,22 @@ const setNode = (name: string, page: number, node: Node): Promise<void> =>
 		new Uint8Array(page).set(nodeType.encodeDelimited(node).finish())
 	)
 
+async function getFreePage(name: string, header: Header): Promise<number> {
+	const file = filename(name)
+	const freePage = header.freePage.next
+	if (freePage === LIST_END) {
+		const pages = await getPageCount(file)
+		await setPageCount(file, pages + 1)
+		return pages
+	}
+	else {
+		header.freePage = await new FilePage(file, freePage).use(async page =>
+			freePageType.toObject(freePageType.decodeDelimited(new Uint8Array(page)))
+		)
+		return freePage
+	}
+}
+
 const isUniquifier = (element: KeyElement): element is {uniquifier: number} =>
 	'uniquifier' in element
 function getUniquifier(key: Key): number | undefined {
@@ -93,15 +111,12 @@ function compareKeys(key1: Key, key2: Key): number {
 }
 function lookupKey(key: Key, keys: Key[], leaf: boolean): number {
 	const {length} = keys
-	let index = length
-	for (let i = 0; i < length; i++) {
+	let i: number
+	for (i = 0; i < length; i++) {
 		const comparison = compareKeys(keys[i], key)
-		if (comparison > 0 || (leaf && !comparison)) {
-			index = i
-			break
-		}
+		if (comparison > 0 || (leaf && !comparison)) break
 	}
-	return index
+	return i
 }
 async function lookup(name: string, key: Key): Promise<PathItem[]> {
 	let {root: page} = await getHeader(name)
@@ -124,6 +139,90 @@ async function lookup(name: string, key: Key): Promise<PathItem[]> {
 		if (children) page = children[index]
 	} while (!leaf)
 	return path
+}
+
+async function saveWithOverflow(
+	name: string, key: Key, path: PathItem[], header: Header
+): Promise<void> {
+	let saving = true, newMinKey = true
+	do {
+		const {page, node, index} = path.pop()!
+		const [parent] = path.slice(-1) as (PathItem | undefined)[]
+		if (newMinKey) {
+			newMinKey = false
+			if (parent && !index) { // changing the minimum element
+				const {node: parentNode, index: parentIndex} = parent
+				if (parentIndex) {
+					if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
+					parentNode.inner.keys[parentIndex - 1] = key
+					newMinKey = true
+				}
+			}
+		}
+		try {
+			await setNode(name, page, node)
+			// Saved node without overflowing
+			saving = newMinKey
+		}
+		catch (e) {
+			// Node overflowed
+			ensureOverflowError(e)
+
+			const newPage = await getFreePage(name, header)
+			let newNode: Node
+			let promotedKey: Key
+			// TODO: this doesn't split leaves evenly
+			if ('leaf' in node) {
+				const {leaf} = node
+				const {keys, values, next} = leaf
+				const splitIndex = keys.length >> 1
+				if (!splitIndex) throw new Error('Item is too large to store')
+				const newKeys = keys.splice(splitIndex)
+				newNode = {leaf: {
+					keys: newKeys,
+					// Make copies of values since they are slices of the old page,
+					// which will be overwritten
+					values: values.splice(splitIndex).map(value => value.slice()),
+					next
+				}}
+				;[promotedKey] = newKeys
+			}
+			else {
+				const {keys, children} = node.inner
+				if (keys.length < 3) throw new Error('Item is too large to store')
+				const splitIndex = (keys.length >> 1) + 1
+				newNode = {inner: {
+					keys: keys.splice(splitIndex),
+					children: children.splice(splitIndex)
+				}}
+				promotedKey = keys.pop()!
+			}
+			const promises = [
+				setNode(name, page, node),
+				setNode(name, newPage, newNode)
+			]
+			// Promote the new key and page to the parent node
+			if (parent) {
+				const parentNode = parent.node
+				if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
+				const {keys, children} = parentNode.inner
+				const insertIndex = parent.index
+				keys.splice(insertIndex, 0, promotedKey)
+				children.splice(insertIndex + 1, 0, newPage)
+			}
+			else { // splitting the root node
+				promises.push((async () => {
+					const rootPage = await getFreePage(name, header)
+					header.root = rootPage
+					await setNode(name, rootPage, {inner: {
+						keys: [promotedKey],
+						children: [page, newPage]
+					}})
+				})())
+			}
+			await Promise.all(promises)
+		}
+	} while (path.length && saving)
 }
 
 async function* itemsFrom(
@@ -186,7 +285,7 @@ export async function insert(
 	}
 	await checkIsSorted(name)
 	const path = await lookup(name, key)
-	const [{page, node, index}] = path.slice(-1)
+	const [{node, index}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	const {keys, values} = node.leaf
 	const oldKey: Key | undefined = keys[index]
@@ -199,16 +298,6 @@ export async function insert(
 	values.splice(index, 0, value)
 	const header = await getHeader(name)
 	header.size++
-	// TODO: handle overflow
-	await setNode(name, page, node)
-	while (path.length > 1) {
-		const {index} = path.pop()!
-		if (index) break // not changing the minimum element
-
-		const [{page, node, index: parentIndex}] = path.slice(-1)
-		if ('leaf' in node) throw new Error('Parent is not an inner node?')
-		node.inner.keys[parentIndex] = key
-		await setNode(name, page, node)
-	}
+	await saveWithOverflow(name, key, path, header)
 	await setHeader(name, header)
 }

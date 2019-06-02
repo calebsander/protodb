@@ -40,17 +40,21 @@ export default (test: TestInterface<TestContext>) => {
 		t.deepEqual(result, [])
 		await t.context.client.sortedDrop(name)
 	})
-	test.failing('sorted-split', async t => {
+	test('sorted-split', async t => {
 		const name = 'many-s'
 		await t.context.client.sortedCreate(name)
 		const getValue = (i: number) => new Uint8Array(50).fill(i)
-		const keys: number[] = []
+		const items: {key: number, value: Uint8Array}[] = []
 		for (let i = 0; i < 1e3; i++) {
-			const float = Math.random()
-			keys.push(float)
-			await t.context.client.sortedInsert(name, [{float}], getValue(i))
+			const key = Math.random()
+			const value = getValue(i)
+			items.push({key, value})
+			await t.context.client.sortedInsert(name, [{float: key}], value)
 		}
-		// TODO: query the values
+		for (const {key, value} of items) {
+			const result = await t.context.client.sortedGet(name, [{float: key}])
+			t.deepEqual(result, [value])
+		}
 		await t.context.client.sortedDrop(name)
 	})
 }

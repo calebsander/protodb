@@ -15,9 +15,7 @@ export class TestContext {
 	private readonly index = TestContext.testIndex++
 	private readonly db = spawn(DB_PATH, ['-p', `${this.port}`, '-d', this.dataDir])
 	public readonly ready = new Promise<void>((resolve, reject) => {
-		const {stdout} = this.db
-		if (!stdout) throw new Error('DB has no stdout?')
-		readline.createInterface(stdout)
+		readline.createInterface(this.db.stdout)
 			.on('line', line => {
 				if (line.startsWith('Listening')) resolve()
 			})
