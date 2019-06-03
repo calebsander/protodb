@@ -103,66 +103,67 @@ function compareKeys(key1: Key, key2: Key): number {
 		}
 		else {
 			if (!('uniquifier' in element2)) throw new Error('Key types do not match')
-			diff = element1.uniquifier - element2.uniquifier
+			// Uniquifier order is reversed so the leftmost equivalent key
+			// has the largest uniquifier
+			diff = element2.uniquifier - element1.uniquifier
 		}
 		if (diff) return diff
 	}
 	return 0
 }
-function lookupKey(key: Key, keys: Key[], leaf: boolean): number {
+function lookupKey(key: Key, keys: Key[]): number {
 	const {length} = keys
 	let i: number
 	for (i = 0; i < length; i++) {
 		const comparison = compareKeys(keys[i], key)
-		if (comparison > 0 || (leaf && !comparison)) break
+		if (comparison >= 0) break
 	}
 	return i
 }
 async function lookup(name: string, key: Key): Promise<PathItem[]> {
 	let {root: page} = await getHeader(name)
 	const path: PathItem[] = []
-	let leaf: boolean
-	do {
+	while (true) {
 		const node = await getNode(name, page)
 		let keys: Key[]
 		let children: number[] | undefined
-		if ('leaf' in node) {
-			({keys} = node.leaf)
-			leaf = true
-		}
-		else {
-			({keys, children} = node.inner)
-			leaf = false
-		}
-		const index = lookupKey(key, keys, leaf)
+		if ('leaf' in node) ({keys} = node.leaf)
+		else ({keys, children} = node.inner)
+		const index = lookupKey(key, keys)
 		path.push({page, node, index})
 		if (children) page = children[index]
-	} while (!leaf)
+		else break
+	}
 	return path
 }
 
 async function saveWithOverflow(
 	name: string, key: Key, path: PathItem[], header: Header
 ): Promise<void> {
-	let saving = true, newMinKey = true
+	let saving = true, newMaxKey = true
 	do {
 		const {page, node, index} = path.pop()!
 		const [parent] = path.slice(-1) as (PathItem | undefined)[]
-		if (newMinKey) {
-			newMinKey = false
-			if (parent && !index) { // changing the minimum element
-				const {node: parentNode, index: parentIndex} = parent
-				if (parentIndex) {
+		if (newMaxKey) {
+			newMaxKey = false
+			if (parent) {
+				const children =
+					'leaf' in node ? node.leaf.values : node.inner.children
+				if (index === children.length - 1) { // changing the maximum element
+					const {node: parentNode, index: parentIndex} = parent
 					if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
-					parentNode.inner.keys[parentIndex - 1] = key
-					newMinKey = true
+					const {keys} = parentNode.inner
+					if (parentIndex < keys.length) {
+						keys[parentIndex] = key
+						newMaxKey = true
+					}
 				}
 			}
 		}
 		try {
 			await setNode(name, page, node)
 			// Saved node without overflowing
-			saving = newMinKey
+			saving = newMaxKey
 		}
 		catch (e) {
 			// Node overflowed
@@ -177,15 +178,15 @@ async function saveWithOverflow(
 				const {keys, values, next} = leaf
 				const splitIndex = keys.length >> 1
 				if (!splitIndex) throw new Error('Item is too large to store')
-				const newKeys = keys.splice(splitIndex)
 				newNode = {leaf: {
-					keys: newKeys,
+					keys: keys.splice(splitIndex),
 					// Make copies of values since they are slices of the old page,
 					// which will be overwritten
 					values: values.splice(splitIndex).map(value => value.slice()),
 					next
 				}}
-				;[promotedKey] = newKeys
+				;[promotedKey] = keys.slice(-1)
+				leaf.next = newPage
 			}
 			else {
 				const {keys, children} = node.inner

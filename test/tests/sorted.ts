@@ -55,6 +55,8 @@ export default (test: TestInterface<TestContext>) => {
 			const result = await t.context.client.sortedGet(name, [{float: key}])
 			t.deepEqual(result, [value])
 		}
+		const result = await t.context.client.sortedGet(name, [])
+		t.deepEqual(result, items.sort((a, b) => a.key - b.key).map(({value}) => value))
 		await t.context.client.sortedDrop(name)
 	})
 }
