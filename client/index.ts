@@ -1,13 +1,13 @@
 import net = require('net')
 import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'
-import {DB, KeyElement, KeyValuePair} from '../pb/interface'
+import {DB, Item, KeyElement, KeyValuePair} from '../pb/interface'
 import {
 	bytesResponseType,
-	bytesListResponseType,
 	Command,
 	commandType,
 	ErrorResponse,
+	itemsListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
@@ -193,12 +193,12 @@ export class ProtoDBClient {
 	async sortedDrop(name: string): Promise<void> {
 		await this.runCommand({sortedDrop: {name}}, voidResponseType)
 	}
-	async sortedGet(name: string, key: KeyElement[]): Promise<Uint8Array[]> {
-		const {values} = await this.runCommand(
+	async sortedGet(name: string, key: KeyElement[]): Promise<Item[]> {
+		const {items} = await this.runCommand(
 			{sortedGet: {name, key}},
-			bytesListResponseType
+			itemsListResponseType
 		)
-		return values.values
+		return items.items
 	}
 	async sortedInsert(
 		name: string, key: KeyElement[], value: ArrayBuffer | Uint8Array

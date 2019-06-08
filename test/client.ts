@@ -8,12 +8,12 @@ import {Type} from '../pb/common'
 import {
 	Command,
 	commandType,
-	BytesListResponse,
+	ItemsListResponse,
 	IterResponse,
 	OptionalBytesResponse,
 	OptionalPairResponse,
 	bytesResponseType,
-	bytesListResponseType,
+	itemsListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
@@ -314,7 +314,7 @@ async function processCommands() {
 					}
 					[bytesType] = await lookupType(typeFile, 'Type')
 					command = {[type]: {name, key: JSON.parse(key)}}
-					responseType = bytesListResponseType
+					responseType = itemsListResponseType
 					break
 				}
 				case 'sortedInsert': {
@@ -362,11 +362,11 @@ async function processCommands() {
 								)
 							}
 							break
-						case bytesListResponseType:
-							const valuesResponse: BytesListResponse = response
-							if ('values' in valuesResponse) {
-								response = valuesResponse.values.values.map(value =>
-									bytesType.toObject(bytesType.decode(value))
+						case itemsListResponseType:
+							const valuesResponse: ItemsListResponse = response
+							if ('items' in valuesResponse) {
+								response = valuesResponse.items.items.map(({key, value}) =>
+									({key, value: bytesType.toObject(bytesType.decode(value))})
 								)
 							}
 							break

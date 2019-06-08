@@ -21,7 +21,7 @@ import {
 	NameValueParams,
 	OptionalIndex,
 	BytesResponse,
-	BytesListResponse,
+	ItemsListResponse,
 	ErrorResponse,
 	IterResponse,
 	ListResponse,
@@ -31,7 +31,7 @@ import {
 	VoidResponse,
 	commandType,
 	bytesResponseType,
-	bytesListResponseType,
+	itemsListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
@@ -193,9 +193,9 @@ const runSortedDrop =
 			.then(_ => ({}))
 			.catch(errorToString)
 const runSortedGet =
-	({name, key}: NameSortedKeyParams): Promise<BytesListResponse> =>
+	({name, key}: NameSortedKeyParams): Promise<ItemsListResponse> =>
 		sorted.get(name, {elements: key})
-			.then(values => ({values: {values}}))
+			.then(items => ({items: {items}}))
 			.catch(errorToString)
 const runSortedInsert =
 	({name, key, value}: NameSortedKeyValueParams): Promise<VoidResponse> =>
@@ -288,7 +288,7 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		writer = voidResponseType.encode(await runSortedDrop(command.sortedDrop))
 	}
 	else if ('sortedGet' in command) {
-		writer = bytesListResponseType.encode(await runSortedGet(command.sortedGet))
+		writer = itemsListResponseType.encode(await runSortedGet(command.sortedGet))
 	}
 	else if ('sortedInsert' in command) {
 		writer = voidResponseType.encode(await runSortedInsert(command.sortedInsert))

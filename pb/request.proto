@@ -128,13 +128,17 @@ message BytesResponse {
 	}
 }
 
-message ValuesList {
-	repeated bytes values = 2;
+message Item {
+	repeated KeyElement key = 1;
+	bytes value = 2;
 }
-message BytesListResponse {
+message ItemsList {
+	repeated Item items = 1;
+}
+message ItemsListResponse {
 	oneof response {
 		string error = 1;
-		ValuesList values = 2;
+		ItemsList items = 2;
 	}
 }
 

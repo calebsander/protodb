@@ -2,7 +2,7 @@ import path = require('path')
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {createFile, FilePage, getPageCount, removeFile, setPageCount} from '../cache'
-import {CollectionType, Key, KeyElement} from '../pb/interface'
+import {CollectionType, Item, Key, KeyElement} from '../pb/interface'
 import {
 	freePageType,
 	Header,
@@ -265,17 +265,17 @@ export async function drop(name: string): Promise<void> {
 	await Promise.all([dropCollection(name), removeFile(filename(name))])
 }
 
-export async function get(name: string, searchKey: Key): Promise<Uint8Array[]> {
+export async function get(name: string, searchKey: Key): Promise<Item[]> {
 	await checkIsSorted(name)
 	const path = await lookup(name, searchKey)
 	const [{node, index}] = path.slice(-1)
-	const values: Uint8Array[] = []
+	const items: Item[] = []
 	for await (const {key, value} of itemsFrom(name, node, index)) {
 		if (compareKeys(key, searchKey)) break
 
-		values.push(value)
+		items.push({key: key.elements, value})
 	}
-	return values
+	return items
 }
 
 export async function insert(

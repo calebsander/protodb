@@ -1,7 +1,7 @@
 import path = require('path')
 import protobuf = require('protobufjs')
 import {Type} from './common'
-import {DB, KeyElement, KeyValuePair} from './interface'
+import {DB, Item, KeyElement, KeyValuePair} from './interface'
 
 const protoFile = protobuf.loadSync(
 	['request.proto', 'db.proto', 'sorted.proto']
@@ -90,12 +90,12 @@ export type BytesResponse = ErrorResponse | {data: Uint8Array}
 export const bytesResponseType =
 	protoFile.lookupType('BytesResponse') as Type<BytesResponse>
 
-export interface ValuesList {
-	values: Uint8Array[]
+export interface ItemsList {
+	items: Item[]
 }
-export type BytesListResponse = ErrorResponse | {values: ValuesList}
-export const bytesListResponseType =
-	protoFile.lookupType('BytesListResponse') as Type<BytesListResponse>
+export type ItemsListResponse = ErrorResponse | {items: ItemsList}
+export const itemsListResponseType =
+	protoFile.lookupType('ItemsListResponse') as Type<ItemsListResponse>
 
 export type IterResponse = ErrorResponse | {iter: Uint8Array}
 export const iterResponseType =

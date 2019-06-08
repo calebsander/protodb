@@ -24,3 +24,7 @@ export type KeyElement
 export interface Key {
 	elements: KeyElement[]
 }
+export interface Item {
+	key: KeyElement[]
+	value: Uint8Array
+}
