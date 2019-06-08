@@ -267,15 +267,11 @@ async function tryCoalesce(
 	// Update sublist's size
 	thisChild.size = nodeSize(node)
 
-	// Make grandparent point directly to this page if it has no more siblings
-	if (children.length === 1) {
+	// Make this the new root if it is the only child of the root node
+	if (path.length === 1 && children.length === 1) {
 		path.pop()
-		const grandParent = getParent(path)
-		const child = grandParent
-			? grandParent.children[grandParent.index]
-			: header.child
-		newFreePages.push(child.page)
-		Object.assign(child, thisChild)
+		newFreePages.push(header.child.page)
+		header.child = thisChild
 	}
 
 	const promises = newFreePages.map(page => addFreePage(name, header, page))
@@ -343,10 +339,12 @@ export async function remove(name: string, listIndex?: number): Promise<void> {
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	node.leaf.values.splice(index, 1)
 	const header = await getHeader(name)
+	let coalesced = true
 	while (path.length) {
 		const {page, node} = path.pop()!
-		const coalesced = await tryCoalesce(name, node, path, header)
-		if (!coalesced) {
+		// Only coalesce if child was coalesced
+		coalesced = coalesced && await tryCoalesce(name, node, path, header)
+		if (!coalesced) { // did not coalesce, so save node
 			await setNode(name, page, node)
 			const parent = getParent(path)
 			const parentChild = parent
