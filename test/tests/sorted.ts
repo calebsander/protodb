@@ -1,6 +1,9 @@
+import {promises as fs} from 'fs'
 import {TestInterface} from 'ava'
 import {TestContext} from '../common'
 import {ProtoDBError} from '../../client'
+import {PAGE_SIZE} from '../../mmap-wrapper'
+import {freePageType, headerType, LIST_END, nodeType} from '../../pb/sorted'
 
 const toFloat = (f: number) => new Float32Array([f])[0]
 
@@ -10,6 +13,53 @@ function shuffle<T>(arr: T[]) {
 		const index = (Math.random() * (length - i)) | 0
 		;[arr[i], arr[index]] = [arr[index], arr[i]]
 	}
+}
+async function getDepth(context: TestContext, name: string): Promise<number> {
+	const fd = await fs.open(context.getFile(`${name}.sorted`), 'r')
+	const pageBuffer = new Uint8Array(PAGE_SIZE)
+	await fd.read(pageBuffer, 0, PAGE_SIZE, 0)
+	let page = headerType.toObject(
+		headerType.decodeDelimited(pageBuffer),
+		{longs: Number}
+	).root
+	let depth = 0
+	while (true) {
+		await fd.read(pageBuffer, 0, PAGE_SIZE, page * PAGE_SIZE)
+		const node = nodeType.toObject(
+			nodeType.decodeDelimited(pageBuffer),
+			{defaults: true, longs: Number}
+		)
+		if ('leaf' in node) break
+
+		[page] = node.inner.children
+		depth++
+	}
+	await fd.close()
+	return depth
+}
+
+async function getPagesInUse(context: TestContext, name: string): Promise<number> {
+	const fd = await fs.open(context.getFile(`${name}.sorted`), 'r')
+	const totalPages = async () => {
+		const {size} = await fd.stat()
+		return size / PAGE_SIZE
+	}
+	const freeListLength = async () => {
+		const pageBuffer = new Uint8Array(PAGE_SIZE)
+		await fd.read(pageBuffer, 0, PAGE_SIZE, 0)
+		let {next} = headerType.toObject(headerType.decodeDelimited(pageBuffer))
+			.freePage
+		let length = 0
+		while (next !== LIST_END) {
+			await fd.read(pageBuffer, 0, PAGE_SIZE, next * PAGE_SIZE)
+			;({next} = freePageType.toObject(freePageType.decodeDelimited(pageBuffer)))
+			length++
+		}
+		return length
+	}
+	const [pages, freePages] = await Promise.all([totalPages(), freeListLength()])
+	await fd.close()
+	return pages - freePages
 }
 
 export default (test: TestInterface<TestContext>) => {
@@ -136,5 +186,67 @@ export default (test: TestInterface<TestContext>) => {
 				.sort((a, b) => a - b)
 				.map(i => ({key: [{int: i}], value: getValue(i)}))
 		)
+	})
+
+	test('sorted-reclaim', async t => {
+		const name = 'sordid'
+		await t.context.client.sortedCreate(name)
+		const getKey = (i: number) => [
+			{string: String.fromCharCode('A'.charCodeAt(0) + i % 26).repeat(100)},
+			{int: (i / 26) | 0}
+		]
+		const getValue = (i: number) => new Uint8Array(100).fill(i * i)
+		const elements = new Array(2e3).fill(0).map((_, i) => i)
+		for (let _ = 0; _ < 2; _++) {
+			for (let i = 0; i < 2e3; i++) {
+				await t.context.client.sortedInsert(name, getKey(i), getValue(i))
+			}
+			let size = await t.context.client.sortedSize(name)
+			t.deepEqual(size, 2e3)
+			t.deepEqual(await getDepth(t.context, name), 2)
+			t.deepEqual(await getPagesInUse(t.context, name), 194)
+			shuffle(elements)
+			for (const i of elements) {
+				const key = getKey(i)
+				const result = await t.context.client.sortedGet(name, key)
+				t.deepEqual(result, [{key, value: getValue(i)}])
+				await t.context.client.sortedDelete(name, key)
+			}
+			size = await t.context.client.sortedSize(name)
+			t.deepEqual(size, 0)
+			t.deepEqual(await getDepth(t.context, name), 0)
+			t.deepEqual(await getPagesInUse(t.context, name), 2)
+			const result = await t.context.client.sortedGet(name, [])
+			t.deepEqual(result, [])
+		}
+	})
+
+	test('sorted-multilevel', async t => {
+		const name = 'big-sort'
+		await t.context.client.sortedCreate(name)
+		// Only one key will fit in each inner node
+		const getKey = (i: number) =>
+			[{string: String.fromCharCode(256 + i).repeat(1500)}]
+		const getValue = (i: number) => new Uint8Array(new Int32Array([i]).buffer)
+		const elements = new Array(1e3).fill(0).map((_, i) => i)
+		for (let _ = 0; _ < 3; _++) {
+			shuffle(elements)
+			for (const i of elements) {
+				await t.context.client.sortedInsert(name, getKey(i), getValue(i))
+			}
+			let size = await t.context.client.sortedSize(name)
+			t.deepEqual(size, 1e3)
+			shuffle(elements)
+			for (const i of elements) {
+				const key = getKey(i)
+				const result = await t.context.client.sortedGet(name, key)
+				t.deepEqual(result, [{key, value: getValue(i)}])
+				await t.context.client.sortedDelete(name, key)
+			}
+			size = await t.context.client.sortedSize(name)
+			t.deepEqual(size, 0)
+			const result = await t.context.client.sortedGet(name, [])
+			t.deepEqual(result, [])
+		}
 	})
 }

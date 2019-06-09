@@ -38,10 +38,8 @@ async function getPagesInUse(context: TestContext, name: string): Promise<number
 	const freeListLength = async () => {
 		const pageBuffer = new Uint8Array(PAGE_SIZE)
 		await fd.read(pageBuffer, 0, PAGE_SIZE, 0)
-		let {next} = headerType.toObject(
-			headerType.decodeDelimited(pageBuffer),
-			{longs: Number}
-		).freePage
+		let {next} = headerType.toObject(headerType.decodeDelimited(pageBuffer))
+			.freePage
 		let length = 0
 		while (next !== FREE_LIST_END) {
 			await fd.read(pageBuffer, 0, PAGE_SIZE, next * PAGE_SIZE)

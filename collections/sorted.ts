@@ -198,7 +198,7 @@ async function saveWithOverflow(
 			}
 			else {
 				const {keys, children} = node.inner
-				if (keys.length < 3) throw new Error('Item is too large to store')
+				if (keys.length < 2) throw new Error('Item is too large to store')
 				const splitIndex = (keys.length >> 1) + 1
 				newNode = {inner: {
 					keys: keys.splice(splitIndex),
@@ -277,18 +277,17 @@ async function tryCoalesce(
 		// We always coalesce into the left sibling so that if it is a leaf,
 		// we don't have to change the "next" value of the previous leaf
 		let leftNode: Node, rightNode: Node
-		let leftIndex: number
+		let leftIndex = siblingIndex
 		if (left) {
 			leftNode = siblingNode
 			rightNode = node
-			leftIndex = siblingIndex
 			newFreePages.push(thisPage)
 			thisPage = siblingPage
 		}
 		else {
 			leftNode = node
 			rightNode = siblingNode
-			leftIndex = index
+			leftIndex-- // sibling is to the right, one index higher
 			newFreePages.push(siblingPage)
 		}
 		let newSize: number | undefined
