@@ -315,6 +315,7 @@ export async function create(name: string): Promise<void> {
 
 export async function drop(name: string): Promise<void> {
 	await checkIsList(name)
+	iterators.checkNoIterators(name)
 	await Promise.all([dropCollection(name), removeFile(filename(name))])
 }
 
@@ -389,9 +390,8 @@ export async function iter(
 	return iterators.registerIterator(name, listEntries(name, start, end))
 }
 
-export function iterBreak(iter: Uint8Array): void {
+export const iterBreak = (iter: Uint8Array): void =>
 	iterators.closeIterator(iter)
-}
 
 export async function iterNext(iter: Uint8Array): Promise<Uint8Array | null> {
 	const iterator = iterators.getIterator(iter)

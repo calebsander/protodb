@@ -8,17 +8,17 @@ import {Type} from '../pb/common'
 import {
 	Command,
 	commandType,
-	ItemsListResponse,
 	IterResponse,
 	OptionalBytesResponse,
 	OptionalPairResponse,
+	SortedPairListResponse,
 	bytesResponseType,
-	itemsListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
 	optionalPairResponseType,
 	sizeResponseType,
+	sortedPairListResponseType,
 	voidResponseType
 } from '../pb/request'
 import {concat} from '../util'
@@ -314,7 +314,7 @@ async function processCommands() {
 					}
 					[bytesType] = await lookupType(typeFile, 'Type')
 					command = {[type]: {name, key: JSON.parse(key)}}
-					responseType = itemsListResponseType
+					responseType = sortedPairListResponseType
 					break
 				}
 				case 'sortedInsert': {
@@ -362,10 +362,10 @@ async function processCommands() {
 								)
 							}
 							break
-						case itemsListResponseType:
-							const valuesResponse: ItemsListResponse = response
-							if ('items' in valuesResponse) {
-								response = valuesResponse.items.items.map(({key, value}) =>
+						case sortedPairListResponseType:
+							const valuesResponse: SortedPairListResponse = response
+							if ('pairs' in valuesResponse) {
+								response = valuesResponse.pairs.pairs.map(({key, value}) =>
 									({key, value: bytesType.toObject(bytesType.decode(value))})
 								)
 							}
@@ -378,8 +378,8 @@ async function processCommands() {
 							break
 						case optionalPairResponseType:
 							const pairResponse: OptionalPairResponse = response
-							if ('item' in pairResponse && pairResponse.item) {
-								const {key, value} = pairResponse.item
+							if ('pair' in pairResponse && pairResponse.pair) {
+								const {key, value} = pairResponse.pair
 								response = {
 									key: keyType.toObject(keyType.decode(key)),
 									value: valueType.toObject(valueType.decode(value))

@@ -204,6 +204,7 @@ export default (test: TestInterface<TestContext>) => {
 
 		const tryOperations = () => Promise.all(
 			[
+				() => t.context.client.listDrop(name),
 				() => t.context.client.listDelete(name),
 				() => t.context.client.listInsert(name, new ArrayBuffer(3)),
 				() => t.context.client.listSet(name, 10, new Uint8Array(1))

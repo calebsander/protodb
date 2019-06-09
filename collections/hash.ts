@@ -295,9 +295,8 @@ export async function iter(name: string): Promise<Uint8Array> {
 	return iterators.registerIterator(name, hashEntries(name))
 }
 
-export function iterBreak(iter: Uint8Array): void {
+export const iterBreak = (iter: Uint8Array): void =>
 	iterators.closeIterator(iter)
-}
 
 export async function iterNext(iter: Uint8Array): Promise<BucketItem | null> {
 	const iterator = iterators.getIterator(iter)

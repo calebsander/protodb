@@ -5,7 +5,7 @@ import {ITER_BYTE_LENGTH} from './constants'
 const randomBytesPromise = promisify(randomBytes)
 
 const getKey = (iter: Uint8Array): string =>
-	Buffer.from(iter).toString('hex')
+	Buffer.from(iter.buffer, iter.byteOffset, iter.byteLength).toString('hex')
 
 export interface CollectionIterator<STATE> {
 	name: string

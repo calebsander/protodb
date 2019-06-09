@@ -12,6 +12,7 @@ import {
 	NameIndexParams,
 	NameIndexValueParams,
 	NameKeyParams,
+	NameKeyRangeParams,
 	NameKeyValueParams,
 	NameOptionalIndexParams,
 	NameOptionalIndexValueParams,
@@ -20,23 +21,26 @@ import {
 	NameSortedKeyValueParams,
 	NameValueParams,
 	OptionalIndex,
+	OptionalKey,
 	BytesResponse,
-	ItemsListResponse,
 	ErrorResponse,
 	IterResponse,
 	ListResponse,
 	OptionalBytesResponse,
 	OptionalPairResponse,
+	OptionalSortedPairResponse,
 	SizeResponse,
+	SortedPairListResponse,
 	VoidResponse,
 	commandType,
 	bytesResponseType,
-	itemsListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
 	optionalPairResponseType,
+	optionalSortedPairResponse,
 	sizeResponseType,
+	sortedPairListResponseType,
 	voidResponseType
 } from './pb/request'
 
@@ -48,6 +52,8 @@ function makeErrorResponse(err: Error): ErrorResponse {
 
 const getIndex = (index: OptionalIndex) =>
 	'none' in index ? undefined : index.value
+const getKey = (key: OptionalKey) =>
+	'none' in key ? undefined : key.value.elements
 
 async function runList(): Promise<ListResponse> {
 	let collections: Collections
@@ -126,7 +132,7 @@ function runHashIterBreak({iter}: IterParams): VoidResponse {
 const runHashIterNext =
 	({iter}: IterParams): Promise<OptionalPairResponse> =>
 		hash.iterNext(iter)
-			.then(item => item ? {item} : {})
+			.then(pair => pair ? {pair} : {})
 			.catch(makeErrorResponse)
 const runListCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
@@ -198,9 +204,9 @@ const runSortedDelete =
 			.then(_ => ({}))
 			.catch(makeErrorResponse)
 const runSortedGet =
-	({name, key}: NameSortedKeyParams): Promise<ItemsListResponse> =>
+	({name, key}: NameSortedKeyParams): Promise<SortedPairListResponse> =>
 		sorted.get(name, key)
-			.then(items => ({items: {items}}))
+			.then(pairs => ({pairs: {pairs}}))
 			.catch(makeErrorResponse)
 const runSortedInsert =
 	({name, key, value}: NameSortedKeyValueParams): Promise<VoidResponse> =>
@@ -211,6 +217,25 @@ const runSortedSize =
 	({name}: NameParams): Promise<SizeResponse> =>
 		sorted.size(name)
 			.then(size => ({size}))
+			.catch(makeErrorResponse)
+const runSortedIter =
+	({name, start, end, inclusive}: NameKeyRangeParams): Promise<IterResponse> =>
+		sorted.iter(name, inclusive, getKey(start), getKey(end))
+			.then(iter => ({iter}))
+			.catch(makeErrorResponse)
+function runSortedIterBreak({iter}: IterParams): VoidResponse {
+	try {
+		sorted.iterBreak(iter)
+	}
+	catch (e) {
+		return makeErrorResponse(e)
+	}
+	return {}
+}
+const runSortedIterNext =
+	({iter}: IterParams): Promise<OptionalSortedPairResponse> =>
+		sorted.iterNext(iter)
+			.then(pair => pair ? {pair} : {})
 			.catch(makeErrorResponse)
 
 async function runCommand(data: Uint8Array): Promise<Uint8Array> {
@@ -259,7 +284,9 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		writer = voidResponseType.encode(runHashIterBreak(command.hashIterBreak))
 	}
 	else if ('hashIterNext' in command) {
-		writer = optionalPairResponseType.encode(await runHashIterNext(command.hashIterNext))
+		writer = optionalPairResponseType.encode(
+			await runHashIterNext(command.hashIterNext)
+		)
 	}
 	else if ('listCreate' in command) {
 		writer = voidResponseType.encode(await runListCreate(command.listCreate))
@@ -289,7 +316,9 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		writer = voidResponseType.encode(runListIterBreak(command.listIterBreak))
 	}
 	else if ('listIterNext' in command) {
-		writer = optionalBytesResponseType.encode(await runListIterNext(command.listIterNext))
+		writer = optionalBytesResponseType.encode(
+			await runListIterNext(command.listIterNext)
+		)
 	}
 	else if ('sortedCreate' in command) {
 		writer = voidResponseType.encode(await runSortedCreate(command.sortedCreate))
@@ -301,13 +330,24 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		writer = voidResponseType.encode(await runSortedDelete(command.sortedDelete))
 	}
 	else if ('sortedGet' in command) {
-		writer = itemsListResponseType.encode(await runSortedGet(command.sortedGet))
+		writer = sortedPairListResponseType.encode(await runSortedGet(command.sortedGet))
 	}
 	else if ('sortedInsert' in command) {
 		writer = voidResponseType.encode(await runSortedInsert(command.sortedInsert))
 	}
 	else if ('sortedSize' in command) {
 		writer = sizeResponseType.encode(await runSortedSize(command.sortedSize))
+	}
+	else if ('sortedIter' in command) {
+		writer = iterResponseType.encode(await runSortedIter(command.sortedIter))
+	}
+	else if ('sortedIterBreak' in command) {
+		writer = voidResponseType.encode(await runSortedIterBreak(command.sortedIterBreak))
+	}
+	else if ('sortedIterNext' in command) {
+		writer = optionalSortedPairResponse.encode(
+			await runSortedIterNext(command.sortedIterNext)
+		)
 	}
 	else {
 		const unreachable: never = command

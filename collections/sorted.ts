@@ -2,7 +2,8 @@ import path = require('path')
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
-import {CollectionType, Item, Key, KeyElement} from '../pb/interface'
+import {Iterators} from '../iterator'
+import {CollectionType, Key, KeyElement, SortedKeyValuePair} from '../pb/interface'
 import {
 	freePageType,
 	Header,
@@ -23,11 +24,6 @@ interface PathItem {
 	page: number
 	node: Node
 	index: number
-}
-
-interface KeyValuePair {
-	key: Key
-	value: Uint8Array
 }
 
 const filename = (name: string) => path.join(dataDir, `${name}.sorted`)
@@ -347,14 +343,21 @@ async function tryCoalesce(
 	return true
 }
 
-async function* itemsFrom(
-	name: string, node: Node, index: number
-): AsyncIterableIterator<KeyValuePair> {
+async function* pairsFrom(
+	name: string, inclusive: boolean, start: KeyElement[], end?: KeyElement[]
+): AsyncIterableIterator<SortedKeyValuePair> {
+	const path = await lookup(name, start)
+	let [{node, index}] = path.slice(-1)
 	while (true) {
 		if ('inner' in node) throw new Error('Not a leaf?')
 		const {keys, values, next} = node.leaf
 		while (index < keys.length) {
-			yield {key: keys[index], value: values[index]}
+			const key = keys[index].elements
+			if (end) {
+				const comparison = compareKeys(key, end)
+				if (comparison > 0 || !(inclusive || comparison)) return
+			}
+			yield {key, value: values[index]}
 			index++
 		}
 		if (next === LIST_END) break
@@ -363,6 +366,7 @@ async function* itemsFrom(
 		index = 0
 	}
 }
+const iterators = new Iterators<AsyncIterator<SortedKeyValuePair>>()
 
 export async function create(name: string): Promise<void> {
 	await addCollection(name, CollectionType.SORTED)
@@ -383,11 +387,13 @@ export async function create(name: string): Promise<void> {
 
 export async function drop(name: string): Promise<void> {
 	await checkIsSorted(name)
+	iterators.checkNoIterators(name)
 	await Promise.all([dropCollection(name), removeFile(filename(name))])
 }
 
 export async function remove(name: string, searchKey: KeyElement[]): Promise<void> {
 	await checkIsSorted(name)
+	iterators.checkNoIterators(name)
 	const path = await lookup(name, searchKey)
 	const [{node, index}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
@@ -413,17 +419,15 @@ export async function remove(name: string, searchKey: KeyElement[]): Promise<voi
 	await setHeader(name, header)
 }
 
-export async function get(name: string, searchKey: KeyElement[]): Promise<Item[]> {
+export async function get(
+	name: string, searchKey: KeyElement[]
+): Promise<SortedKeyValuePair[]> {
 	await checkIsSorted(name)
-	const path = await lookup(name, searchKey)
-	const [{node, index}] = path.slice(-1)
-	const items: Item[] = []
-	for await (const {key, value} of itemsFrom(name, node, index)) {
-		if (compareKeys(key.elements, searchKey)) break
-
-		items.push({key: key.elements, value})
+	const pairs: SortedKeyValuePair[] = []
+	for await (const pair of pairsFrom(name, true, searchKey, searchKey)) {
+		pairs.push(pair)
 	}
-	return items
+	return pairs
 }
 
 export async function insert(
@@ -433,6 +437,7 @@ export async function insert(
 		throw new Error('Key cannot include uniquifier')
 	}
 	await checkIsSorted(name)
+	iterators.checkNoIterators(name)
 	const path = await lookup(name, key)
 	const [{node, index}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
@@ -461,4 +466,25 @@ export async function size(name: string): Promise<number> {
 	await checkIsSorted(name)
 	const {size} = await getHeader(name)
 	return size
+}
+
+export async function iter(
+	name: string, inclusive: boolean, start?: KeyElement[], end?: KeyElement[]
+): Promise<Uint8Array> {
+	await checkIsSorted(name)
+	const iterator = pairsFrom(name, inclusive, start || [], end)
+	return iterators.registerIterator(name, iterator)
+}
+
+export const iterBreak = (iter: Uint8Array): void =>
+	iterators.closeIterator(iter)
+
+export async function iterNext(iter: Uint8Array): Promise<SortedKeyValuePair | null> {
+	const iterator = iterators.getIterator(iter)
+	const {value, done} = await iterator.next()
+	if (done) {
+		iterators.closeIterator(iter)
+		return null
+	}
+	return value
 }

@@ -1,7 +1,7 @@
 import path = require('path')
 import protobuf = require('protobufjs')
 import {Type} from './common'
-import {DB, Item, KeyElement, KeyValuePair} from './interface'
+import {DB, Key, KeyElement, KeyValuePair, SortedKeyValuePair} from './interface'
 
 const protoFile = protobuf.loadSync(
 	['request.proto', 'db.proto', 'sorted.proto']
@@ -9,6 +9,7 @@ const protoFile = protobuf.loadSync(
 )
 
 export type OptionalIndex = {none: {}} | {value: number}
+export type OptionalKey = {none: {}} | {value: Key}
 
 export interface NameParams {
 	name: string
@@ -47,6 +48,11 @@ export interface NameSortedKeyParams extends NameParams {
 export interface NameSortedKeyValueParams extends NameSortedKeyParams {
 	value: Uint8Array
 }
+export interface NameKeyRangeParams extends NameParams {
+	start: OptionalKey
+	end: OptionalKey
+	inclusive: boolean
+}
 export type Command
 	= {list: {}}
 
@@ -82,6 +88,9 @@ export type Command
 	| {sortedGet: NameSortedKeyParams}
 	| {sortedInsert: NameSortedKeyValueParams}
 	| {sortedSize: NameParams}
+	| {sortedIter: NameKeyRangeParams}
+	| {sortedIterBreak: IterParams}
+	| {sortedIterNext: IterParams}
 export const commandType = protoFile.lookupType('Command') as Type<Command>
 
 export interface ErrorResponse {
@@ -91,13 +100,6 @@ export interface ErrorResponse {
 export type BytesResponse = ErrorResponse | {data: Uint8Array}
 export const bytesResponseType =
 	protoFile.lookupType('BytesResponse') as Type<BytesResponse>
-
-export interface ItemsList {
-	items: Item[]
-}
-export type ItemsListResponse = ErrorResponse | {items: ItemsList}
-export const itemsListResponseType =
-	protoFile.lookupType('ItemsListResponse') as Type<ItemsListResponse>
 
 export type IterResponse = ErrorResponse | {iter: Uint8Array}
 export const iterResponseType =
@@ -112,13 +114,24 @@ export type OptionalBytesResponse = BytesResponse | {none: {}}
 export const optionalBytesResponseType =
 	protoFile.lookupType('OptionalBytesResponse') as Type<OptionalBytesResponse>
 
-export type OptionalPairResponse = ErrorResponse | {item?: KeyValuePair}
+export type OptionalPairResponse = ErrorResponse | {pair?: KeyValuePair}
 export const optionalPairResponseType =
 	protoFile.lookupType('OptionalPairResponse') as Type<OptionalPairResponse>
+
+export type OptionalSortedPairResponse = ErrorResponse | {pair?: SortedKeyValuePair}
+export const optionalSortedPairResponse =
+	protoFile.lookupType('OptionalSortedPairResponse') as Type<OptionalSortedPairResponse>
 
 export type SizeResponse = ErrorResponse | {size: number}
 export const sizeResponseType =
 	protoFile.lookupType('SizeResponse') as Type<SizeResponse>
+
+export interface SortedPairList {
+	pairs: SortedKeyValuePair[]
+}
+export type SortedPairListResponse = ErrorResponse | {pairs: SortedPairList}
+export const sortedPairListResponseType =
+	protoFile.lookupType('SortedPairListResponse') as Type<SortedPairListResponse>
 
 export type VoidResponse = Partial<ErrorResponse>
 export const voidResponseType =

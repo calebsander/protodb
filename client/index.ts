@@ -1,18 +1,19 @@
 import net = require('net')
 import {DEFAULT_PORT} from '../constants'
 import {Type} from '../pb/common'
-import {DB, Item, KeyElement, KeyValuePair} from '../pb/interface'
+import {DB, KeyElement, KeyValuePair, SortedKeyValuePair} from '../pb/interface'
 import {
 	bytesResponseType,
 	Command,
 	commandType,
 	ErrorResponse,
-	itemsListResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
 	optionalPairResponseType,
+	optionalSortedPairResponse,
 	sizeResponseType,
+	sortedPairListResponseType,
 	voidResponseType
 } from '../pb/request'
 import {concat} from '../util'
@@ -21,6 +22,8 @@ const toUint8Array = (buffer: ArrayBuffer | Uint8Array) =>
 	buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
 const toOptionalIndex = (index?: number) =>
 	index === undefined ? {none: {}} : {value: index}
+const toOptionalKey = (key?: KeyElement[]) =>
+	key ? {value: {elements: key}} : {none: {}}
 const toOptionalBytes = (value: {data: Uint8Array} | {none: {}}) =>
 	'data' in value ? value.data : null
 
@@ -116,11 +119,11 @@ export class ProtoDBClient {
 		await this.runCommand({hashIterBreak: {iter}}, voidResponseType)
 	}
 	async hashIterNext(iter: Uint8Array): Promise<KeyValuePair | null> {
-		const {item} = await this.runCommand(
+		const {pair} = await this.runCommand(
 			{hashIterNext: {iter}},
 			optionalPairResponseType
 		)
-		return item || null
+		return pair || null
 	}
 	async listCreate(name: string): Promise<void> {
 		await this.runCommand({listCreate: {name}}, voidResponseType)
@@ -196,12 +199,12 @@ export class ProtoDBClient {
 	async sortedDelete(name: string, key: KeyElement[]): Promise<void> {
 		await this.runCommand({sortedDelete: {name, key}}, voidResponseType)
 	}
-	async sortedGet(name: string, key: KeyElement[]): Promise<Item[]> {
-		const {items} = await this.runCommand(
+	async sortedGet(name: string, key: KeyElement[]): Promise<SortedKeyValuePair[]> {
+		const {pairs} = await this.runCommand(
 			{sortedGet: {name, key}},
-			itemsListResponseType
+			sortedPairListResponseType
 		)
-		return items.items
+		return pairs.pairs
 	}
 	async sortedInsert(
 		name: string, key: KeyElement[], value: ArrayBuffer | Uint8Array
@@ -214,5 +217,29 @@ export class ProtoDBClient {
 	async sortedSize(name: string): Promise<number> {
 		const {size} = await this.runCommand({sortedSize: {name}}, sizeResponseType)
 		return size
+	}
+	async sortedIter(
+		name: string, start?: KeyElement[], end?: KeyElement[], inclusive = false
+	): Promise<Uint8Array> {
+		const {iter} = await this.runCommand(
+			{sortedIter: {
+				name,
+				start: toOptionalKey(start),
+				end: toOptionalKey(end),
+				inclusive
+			}},
+			iterResponseType
+		)
+		return iter
+	}
+	async sortedIterBreak(iter: Uint8Array): Promise<void> {
+		await this.runCommand({sortedIterBreak: {iter}}, voidResponseType)
+	}
+	async sortedIterNext(iter: Uint8Array): Promise<SortedKeyValuePair | null> {
+		const {pair} = await this.runCommand(
+			{sortedIterNext: {iter}},
+			optionalSortedPairResponse
+		)
+		return pair || null
 	}
 }

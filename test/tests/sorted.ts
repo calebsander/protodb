@@ -3,6 +3,7 @@ import {TestInterface} from 'ava'
 import {TestContext} from '../common'
 import {ProtoDBError} from '../../client'
 import {PAGE_SIZE} from '../../mmap-wrapper'
+import {SortedKeyValuePair} from '../../pb/interface'
 import {freePageType, headerType, LIST_END, nodeType} from '../../pb/sorted'
 
 const toFloat = (f: number) => new Float32Array([f])[0]
@@ -248,5 +249,70 @@ export default (test: TestInterface<TestContext>) => {
 			const result = await t.context.client.sortedGet(name, [])
 			t.deepEqual(result, [])
 		}
+	})
+
+	test('sorted-iter', async t => {
+		const name = 'iterrr'
+		await t.context.client.sortedCreate(name)
+		const getValue = (i: number) => new Uint8Array(10).map((_, j) => i ** j)
+		for (let i = 0; i < 1e3; i++) {
+			await t.context.client.sortedInsert(name, [], getValue(i))
+		}
+		const makePairRange = (i: number, length: number) =>
+			new Array(length).fill(0).map((_, j) => {
+				const index = 999 - (i + j)
+				return {key: [{uniquifier: index}], value: getValue(index)}
+			})
+		async function getAll(iter: Uint8Array) {
+			const pairs: SortedKeyValuePair[] = []
+			while (true) {
+				const pair = await t.context.client.sortedIterNext(iter)
+				if (!pair) break
+				pairs.push(pair)
+			}
+			return pairs
+		}
+		const tryOperations = () => Promise.all(
+			[
+				() => t.context.client.sortedDrop(name),
+				() => t.context.client.sortedDelete(name, []),
+				() => t.context.client.sortedInsert(name, [], new ArrayBuffer(0))
+			].map(action => t.throwsAsync(action, {
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} has active iterators`
+			}))
+		)
+		let iter = await t.context.client.sortedIter(name)
+		await tryOperations()
+		t.deepEqual(await getAll(iter), makePairRange(0, 1e3))
+		iter = await t.context.client.sortedIter(name, [{uniquifier: 499}])
+		await tryOperations()
+		t.deepEqual(await getAll(iter), makePairRange(500, 500))
+		iter = await t.context.client.sortedIter(name, undefined, [{uniquifier: 499}])
+		await tryOperations()
+		t.deepEqual(await getAll(iter), makePairRange(0, 500))
+		iter = await t.context.client.sortedIter(
+			name, undefined, [{uniquifier: 499}], true
+		)
+		await tryOperations()
+		t.deepEqual(await getAll(iter), makePairRange(0, 501))
+		iter = await t.context.client.sortedIter(
+			name, [{uniquifier: 899}], [{uniquifier: 399}]
+		)
+		await tryOperations()
+		t.deepEqual(await getAll(iter), makePairRange(100, 500))
+		iter = await t.context.client.sortedIter(
+			name, [{uniquifier: 899}], [{uniquifier: 399}], true
+		)
+		await tryOperations()
+		t.deepEqual(await getAll(iter), makePairRange(100, 501))
+		iter = await t.context.client.sortedIter(name)
+		await tryOperations()
+		const result = await t.context.client.sortedIterNext(iter)
+		t.deepEqual(result, makePairRange(0, 1)[0])
+		await t.context.client.sortedIterBreak(iter)
+
+		// Modifications should now succeed
+		await t.context.client.sortedDrop(name)
 	})
 }
