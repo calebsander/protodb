@@ -11,12 +11,14 @@ import {
 	IterResponse,
 	OptionalBytesResponse,
 	OptionalPairResponse,
+	OptionalSortedPairResponse,
 	SortedPairListResponse,
 	bytesResponseType,
 	iterResponseType,
 	listResponseType,
 	optionalBytesResponseType,
 	optionalPairResponseType,
+	optionalSortedPairResponse,
 	sizeResponseType,
 	sortedPairListResponseType,
 	voidResponseType
@@ -63,17 +65,18 @@ async function processCommands() {
 					command = {[type]: {}}
 					responseType = listResponseType
 					break
-				case 'itemCreate': {
+				// Name-only commands
+				case 'itemCreate':
+				case 'itemDrop':
+				case 'hashCreate':
+				case 'hashDrop':
+				case 'listCreate':
+				case 'listDrop':
+				case 'sortedCreate':
+				case 'sortedDrop': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = voidResponseType
-					break
-				}
-				case 'itemDrop': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
+					command = {[type]: {name}} as Command
 					responseType = voidResponseType
 					break
 				}
@@ -97,20 +100,6 @@ async function processCommands() {
 						name,
 						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
 					}}
-					responseType = voidResponseType
-					break
-				}
-				case 'hashCreate': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = voidResponseType
-					break
-				}
-				case 'hashDrop': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
 					responseType = voidResponseType
 					break
 				}
@@ -157,10 +146,12 @@ async function processCommands() {
 					responseType = voidResponseType
 					break
 				}
-				case 'hashSize': {
+				case 'hashSize':
+				case 'listSize':
+				case 'sortedSize': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
+					command = {[type]: {name}} as Command
 					responseType = sizeResponseType
 					break
 				}
@@ -171,10 +162,12 @@ async function processCommands() {
 					responseType = iterResponseType
 					break
 				}
-				case 'hashIterBreak': {
+				case 'hashIterBreak':
+				case 'listIterBreak':
+				case 'sortedIterBreak': {
 					const iter: string | undefined = args[1]
 					if (!iter) throw new Error(`Syntax: ${type} iter`)
-					command = {[type]: {iter: fromHexString(iter)}}
+					command = {[type]: {iter: fromHexString(iter)}} as Command
 					responseType = voidResponseType
 					break
 				}
@@ -188,26 +181,12 @@ async function processCommands() {
 					responseType = optionalPairResponseType
 					break
 				}
-				case 'listCreate': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = voidResponseType
-					break
-				}
-				case 'listDrop': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = voidResponseType
-					break
-				}
 				case 'listDelete': {
 					const [name, index] = args.slice(1) as (string | undefined)[]
 					if (!name) throw new Error(`Syntax: ${type} name [index]`)
 					command = {[type]: {
 						name,
-						index: index === undefined ? {none: {}} : {value: Number(index)}
+						index: index ? {value: Number(index)} : {none: {}}
 					}}
 					responseType = voidResponseType
 					break
@@ -238,7 +217,7 @@ async function processCommands() {
 					const [valueType] = await lookupType(typeFile, 'Type')
 					command = {[type]: {
 						name,
-						index: index === undefined ? {none: {}} : {value: Number(index)},
+						index: index ? {value: Number(index)} : {none: {}},
 						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
 					}}
 					responseType = voidResponseType
@@ -258,29 +237,15 @@ async function processCommands() {
 					responseType = voidResponseType
 					break
 				}
-				case 'listSize': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = sizeResponseType
-					break
-				}
 				case 'listIter': {
 					const [name, start, end] = args.slice(1) as (string | undefined)[]
 					if (!name) throw new Error(`Syntax: ${type} name [start [end]]`)
 					command = {[type]: {
 						name,
-						start: start === undefined ? {none: {}} : {value: Number(start)},
-						end: end === undefined ? {none: {}} : {value: Number(end)}
+						start: start ? {value: Number(start)} : {none: {}},
+						end: end ? {value: Number(end)} : {none: {}}
 					}}
 					responseType = iterResponseType
-					break
-				}
-				case 'listIterBreak': {
-					const iter: string | undefined = args[1]
-					if (!iter) throw new Error(`Syntax: ${type} iter`)
-					command = {[type]: {iter: fromHexString(iter)}}
-					responseType = voidResponseType
 					break
 				}
 				case 'listIterNext': {
@@ -293,17 +258,12 @@ async function processCommands() {
 					responseType = optionalBytesResponseType
 					break
 				}
-				case 'sortedCreate': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = voidResponseType
-					break
-				}
-				case 'sortedDrop': {
-					const name: string | undefined = args[1]
-					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
+				case 'sortedDelete': {
+					const [name, key] = args.slice(1) as (string | undefined)[]
+					if (!(name && key)) {
+						throw new Error(`Syntax: ${type} name key`)
+					}
+					command = {[type]: {name, key: JSON.parse(key)}}
 					responseType = voidResponseType
 					break
 				}
@@ -331,6 +291,28 @@ async function processCommands() {
 					responseType = voidResponseType
 					break
 				}
+				case 'sortedIter': {
+					const [name, start, end, inclusive] = args.slice(1) as (string | undefined)[]
+					if (!name) throw new Error(`Syntax: ${type} name [start [end ["in"]]]`)
+					command = {[type]: {
+						name,
+						start: start ? {value: {elements: JSON.parse(start)}} : {none: {}},
+						end: end ? {value: {elements: JSON.parse(end)}} : {none: {}},
+						inclusive: !!inclusive
+					}}
+					responseType = iterResponseType
+					break
+				}
+				case 'sortedIterNext': {
+					const [iter, typeFile] = args.slice(1) as (string | undefined)[]
+					if (!(iter && typeFile)) {
+						throw new Error(`Syntax: ${type} iter typeFile`)
+					}
+					[bytesType] = await lookupType(typeFile, 'Type')
+					command = {[type]: {iter: fromHexString(iter)}}
+					responseType = optionalSortedPairResponse
+					break
+				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}
@@ -350,7 +332,7 @@ async function processCommands() {
 				.on('end', () => {
 					let response = responseType.toObject(
 						responseType.decode(concat(responseChunks)),
-						{defaults: true, longs: Number}
+						{defaults: true, enums: String, longs: Number}
 					)
 					switch (responseType) {
 						case bytesResponseType:
@@ -383,6 +365,16 @@ async function processCommands() {
 								response = {
 									key: keyType.toObject(keyType.decode(key)),
 									value: valueType.toObject(valueType.decode(value))
+								}
+							}
+							break
+						case optionalSortedPairResponse:
+							const sortedPairResponse: OptionalSortedPairResponse = response
+							if ('pair' in sortedPairResponse && sortedPairResponse.pair) {
+								const {key, value} = sortedPairResponse.pair
+								response = {
+									key,
+									value: bytesType.toObject(bytesType.decode(value))
 								}
 							}
 					}
