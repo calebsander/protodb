@@ -1,7 +1,7 @@
 import path = require('path')
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
-import {createFile, FilePage, getPageCount, removeFile, setPageCount} from '../cache'
+import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
 import {CollectionType, Item, Key, KeyElement} from '../pb/interface'
 import {
 	freePageType,
@@ -11,10 +11,13 @@ import {
 	Node,
 	nodeType
 } from '../pb/sorted'
-import {ensureOverflowError} from '../util'
+import {argmin, ensureOverflowError, getNodeLength} from '../util'
 
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
+// Slightly less than half because joining inner nodes requires
+// pulling down the split key from their parent
+const MIN_NODE_LENGTH = (PAGE_SIZE * 0.45) | 0
 
 interface PathItem {
 	page: number
@@ -75,18 +78,23 @@ async function getFreePage(name: string, header: Header): Promise<number> {
 		return freePage
 	}
 }
+const addFreePage = (name: string, header: Header, pageNo: number): Promise<void> =>
+	new FilePage(filename(name), pageNo).use(async page => {
+		const {freePage} = header
+		new Uint8Array(page).set(freePageType.encodeDelimited(freePage).finish())
+		freePage.next = pageNo
+	})
 
-const isUniquifier = (element: KeyElement): element is {uniquifier: number} =>
-	'uniquifier' in element
-function getUniquifier(key: Key): number | undefined {
-	const uniquifier = key.elements.find(isUniquifier)
-	return uniquifier && uniquifier.uniquifier
+function getUniquifier(key: KeyElement[]): number | undefined {
+	const [lastElement] = key.slice(-1) as [KeyElement] | []
+	return lastElement && 'uniquifier' in lastElement
+		? lastElement.uniquifier
+		: undefined
 }
-function compareKeys(key1: Key, key2: Key): number {
-	const elements1 = key1.elements, elements2 = key2.elements
-	const minLength = Math.min(elements1.length, elements2.length)
+function compareKeys(key1: KeyElement[], key2: KeyElement[]): number {
+	const minLength = Math.min(key1.length, key2.length)
 	for (let i = 0; i < minLength; i++) {
-		const element1 = elements1[i], element2 = elements2[i]
+		const element1 = key1[i], element2 = key2[i]
 		let diff: number
 		if ('int' in element1) {
 			if (!('int' in element2)) throw new Error('Key types do not match')
@@ -111,16 +119,16 @@ function compareKeys(key1: Key, key2: Key): number {
 	}
 	return 0
 }
-function lookupKey(key: Key, keys: Key[]): number {
+function lookupKey(key: KeyElement[], keys: Key[]): number {
 	const {length} = keys
 	let i: number
 	for (i = 0; i < length; i++) {
-		const comparison = compareKeys(keys[i], key)
+		const comparison = compareKeys(keys[i].elements, key)
 		if (comparison >= 0) break
 	}
 	return i
 }
-async function lookup(name: string, key: Key): Promise<PathItem[]> {
+async function lookup(name: string, key: KeyElement[]): Promise<PathItem[]> {
 	let {root: page} = await getHeader(name)
 	const path: PathItem[] = []
 	while (true) {
@@ -138,12 +146,12 @@ async function lookup(name: string, key: Key): Promise<PathItem[]> {
 }
 
 async function saveWithOverflow(
-	name: string, key: Key, path: PathItem[], header: Header
+	name: string, key: KeyElement[], path: PathItem[], header: Header
 ): Promise<void> {
 	let saving = true, newMaxKey = true
 	do {
 		const {page, node, index} = path.pop()!
-		const [parent] = path.slice(-1) as (PathItem | undefined)[]
+		const [parent] = path.slice(-1) as [PathItem] | []
 		if (newMaxKey) {
 			newMaxKey = false
 			if (parent) {
@@ -154,7 +162,7 @@ async function saveWithOverflow(
 					if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
 					const {keys} = parentNode.inner
 					if (parentIndex < keys.length) {
-						keys[parentIndex] = key
+						keys[parentIndex] = {elements: key}
 						newMaxKey = true
 					}
 				}
@@ -226,6 +234,120 @@ async function saveWithOverflow(
 	} while (path.length && saving)
 }
 
+async function tryCoalesce(
+	name: string, node: Node, path: PathItem[], header: Header
+): Promise<boolean> {
+	if (!path.length) return false // root node can't be coalesced
+	const {len} = nodeType.encodeDelimited(node)
+	if (len >= MIN_NODE_LENGTH) return false // ensure node is sufficiently empty
+
+	const [{node: parentNode, index}] = path.slice(-1)
+	if ('leaf' in parentNode) throw new Error('Parent is not a leaf?')
+	const {keys, children} = parentNode.inner
+	let thisPage = children[index]
+	const file = filename(name)
+	const siblingLengths = await Promise.all(
+		[true, false]
+			.map(left => {
+				const siblingIndex = left ? index - 1 : index + 1
+				return {left, siblingIndex, sibling: children[siblingIndex]}
+			})
+			.filter(({sibling}) => sibling) // skip siblings that don't exist
+			.map(async sibling => {
+				const length = await getNodeLength(file, sibling.sibling)
+				return {sibling, length}
+			})
+	)
+	// Coalescing is only possible with less than half-full siblings
+	const coalesceCandidates =
+		siblingLengths.filter(({length}) => length < MIN_NODE_LENGTH)
+	if (!coalesceCandidates.length) return false
+
+	const originalNode = node
+	const newFreePages: number[] = []
+	let coalesceAgain: boolean
+	do {
+		// Choose the smaller of the candidate siblings to coalesce
+		const coalesceSibling = argmin(coalesceCandidates, ({length}) => length)
+
+		// Coalesce with selected sibling
+		const [{sibling}] = coalesceCandidates.splice(coalesceSibling, 1)
+		const {left, siblingIndex, sibling: siblingPage} = sibling
+		const siblingNode = await getNode(name, siblingPage)
+		// We always coalesce into the left sibling so that if it is a leaf,
+		// we don't have to change the "next" value of the previous leaf
+		let leftNode: Node, rightNode: Node
+		let leftIndex: number
+		if (left) {
+			leftNode = siblingNode
+			rightNode = node
+			leftIndex = siblingIndex
+			newFreePages.push(thisPage)
+			thisPage = siblingPage
+		}
+		else {
+			leftNode = node
+			rightNode = siblingNode
+			leftIndex = index
+			newFreePages.push(siblingPage)
+		}
+		let newSize: number | undefined
+		if ('inner' in leftNode) {
+			if ('leaf' in rightNode) throw new Error('Invalid sibling?')
+			const leftInner = leftNode.inner, rightInner = rightNode.inner
+			let newNode = {inner: {
+				keys: [...leftInner.keys, keys[leftIndex], ...rightInner.keys],
+				children: [...leftInner.children, ...rightInner.children]
+			}}
+			// Ensure that this node is not too big (since it includes the split key)
+			newSize = nodeType.encodeDelimited(newNode).len
+			if (newSize > PAGE_SIZE) break
+			node = newNode
+		}
+		else {
+			if ('inner' in rightNode) throw new Error('Invalid sibling?')
+			const leftLeaf = leftNode.leaf, rightLeaf = rightNode.leaf
+			const values = leftLeaf.values.slice()
+			// Copy right node's values because they are slices of its page,
+			// which will be overwritten when it gets added to the free list
+			for (const value of rightLeaf.values) values.push(value.slice())
+			node = {leaf: {
+				keys: [...leftLeaf.keys, ...rightLeaf.keys],
+				values,
+				next: rightLeaf.next
+			}}
+		}
+
+		// Remove left sibling's key and right sibling's page from parent
+		keys.splice(leftIndex, 1)
+		children.splice(leftIndex + 1, 1)
+
+		// See if it is possible to coalesce with the other sibling
+		if (coalesceCandidates.length) {
+			if (newSize === undefined) newSize = nodeType.encodeDelimited(node).len
+			coalesceAgain = newSize < MIN_NODE_LENGTH
+			if (coalesceAgain) {
+				// The index of the right sibling goes down if the left sibling is removed
+				if (left) coalesceCandidates[0].sibling.siblingIndex--
+			}
+		}
+		else coalesceAgain = false
+	} while (coalesceAgain)
+	if (node === originalNode) return false
+
+	// Make this the new root if it is the only child of the root node
+	if (path.length === 1 && children.length === 1) {
+		path.pop()
+		newFreePages.push(header.root)
+		header.root = thisPage
+	}
+
+	const promises = newFreePages.map(page => addFreePage(name, header, page))
+	promises.push(setNode(name, thisPage, node))
+	await Promise.all(promises)
+	return true
+}
+
 async function* itemsFrom(
 	name: string, node: Node, index: number
 ): AsyncIterableIterator<KeyValuePair> {
@@ -265,13 +387,40 @@ export async function drop(name: string): Promise<void> {
 	await Promise.all([dropCollection(name), removeFile(filename(name))])
 }
 
-export async function get(name: string, searchKey: Key): Promise<Item[]> {
+export async function remove(name: string, searchKey: KeyElement[]): Promise<void> {
+	await checkIsSorted(name)
+	const path = await lookup(name, searchKey)
+	const [{node, index}] = path.slice(-1)
+	if ('inner' in node) throw new Error('Path does not end in a leaf?')
+	const {keys, values} = node.leaf
+	const oldKey = keys[index] as Key | undefined
+	// If key doesn't match, deletion can't be performed
+	if (!oldKey || compareKeys(oldKey.elements, searchKey)) {
+		throw new Error('No matching key')
+	}
+
+	keys.splice(index, 1)
+	values.splice(index, 1)
+	const header = await getHeader(name)
+	header.size--
+	let coalesced: boolean
+	do {
+		const {page, node} = path.pop()!
+		// Only coalesce if child was coalesced
+		coalesced = await tryCoalesce(name, node, path, header)
+		// If node couldn't be coalesced, save it as-is
+		if (!coalesced) await setNode(name, page, node)
+	} while (path.length && coalesced)
+	await setHeader(name, header)
+}
+
+export async function get(name: string, searchKey: KeyElement[]): Promise<Item[]> {
 	await checkIsSorted(name)
 	const path = await lookup(name, searchKey)
 	const [{node, index}] = path.slice(-1)
 	const items: Item[] = []
 	for await (const {key, value} of itemsFrom(name, node, index)) {
-		if (compareKeys(key, searchKey)) break
+		if (compareKeys(key.elements, searchKey)) break
 
 		items.push({key: key.elements, value})
 	}
@@ -279,7 +428,7 @@ export async function get(name: string, searchKey: Key): Promise<Item[]> {
 }
 
 export async function insert(
-	name: string, key: Key, value: Uint8Array
+	name: string, key: KeyElement[], value: Uint8Array
 ): Promise<void> {
 	if (getUniquifier(key) !== undefined) {
 		throw new Error('Key cannot include uniquifier')
@@ -289,16 +438,28 @@ export async function insert(
 	const [{node, index}] = path.slice(-1)
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	const {keys, values} = node.leaf
-	const oldKey: Key | undefined = keys[index]
-	if (oldKey && !compareKeys(key, oldKey)) {
-		const oldUniquifier = getUniquifier(oldKey)
-		if (oldUniquifier === undefined) oldKey.elements.push({uniquifier: 0})
-		key.elements.push({uniquifier: (oldUniquifier || 0) + 1})
+	const oldKey = keys[index] as Key | undefined
+	if (oldKey) {
+		const {elements} = oldKey
+		if (!compareKeys(key, elements)) {
+			let oldUniquifier = getUniquifier(elements)
+			if (oldUniquifier === undefined) {
+				oldUniquifier = 0
+				elements.push({uniquifier: oldUniquifier})
+			}
+			key.push({uniquifier: oldUniquifier + 1})
+		}
 	}
-	keys.splice(index, 0, key)
+	keys.splice(index, 0, {elements: key})
 	values.splice(index, 0, value)
 	const header = await getHeader(name)
 	header.size++
 	await saveWithOverflow(name, key, path, header)
 	await setHeader(name, header)
+}
+
+export async function size(name: string): Promise<number> {
+	await checkIsSorted(name)
+	const {size} = await getHeader(name)
+	return size
 }

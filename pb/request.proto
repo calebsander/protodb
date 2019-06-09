@@ -111,10 +111,10 @@ message Command {
 
 		NameParams sortedCreate = 25;
 		NameParams sortedDrop = 26;
-		// NameSortedKeyParams sortedDelete = 27;
+		NameSortedKeyParams sortedDelete = 27;
 		NameSortedKeyParams sortedGet = 28;
 		NameSortedKeyValueParams sortedInsert = 29;
-		// NameParams sortedSize = 30;
+		NameParams sortedSize = 30;
 		// NameKeyRangeParams sortedIter = 31;
 		// IterParams sortedIterBreak = 32;
 		// IterParams sortedIterNext = 33;

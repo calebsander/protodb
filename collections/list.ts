@@ -1,5 +1,4 @@
 import path = require('path')
-import {Reader} from 'protobufjs'
 import {addCollection, dropCollection, getCollections} from '.'
 import {dataDir} from '../args'
 import {createFile, FilePage, getPageCount, PAGE_SIZE, removeFile, setPageCount} from '../cache'
@@ -13,7 +12,7 @@ import {
 	Node,
 	nodeType
 } from '../pb/list'
-import {ensureOverflowError} from '../util'
+import {argmin, ensureOverflowError, getNodeLength} from '../util'
 
 const HEADER_PAGE = 0
 const INITIAL_ROOT_PAGE = 1
@@ -53,11 +52,6 @@ const getNode = (name: string, page: number): Promise<Node> =>
 			{defaults: true, longs: Number}
 		)
 	)
-const getNodeLength = (name: string, page: number): Promise<number> =>
-	new FilePage(filename(name), page).use(async page => {
-		const reader = new Reader(new Uint8Array(page))
-		return reader.uint32() + reader.pos
-	})
 const setNode = (name: string, page: number, node: Node): Promise<void> =>
 	new FilePage(filename(name), page).use(async page =>
 		new Uint8Array(page).set(nodeType.encodeDelimited(node).finish())
@@ -202,6 +196,7 @@ async function tryCoalesce(
 
 	const {children, index} = parent
 	const thisChild = children[index]
+	const file = filename(name)
 	const siblingLengths = await Promise.all(
 		[true, false]
 			.map(left => {
@@ -210,7 +205,7 @@ async function tryCoalesce(
 			})
 			.filter(({sibling}) => sibling) // skip siblings that don't exist
 			.map(async sibling => {
-				const length = await getNodeLength(name, sibling.sibling.page)
+				const length = await getNodeLength(file, sibling.sibling.page)
 				return {sibling, length}
 			})
 	)
@@ -221,18 +216,11 @@ async function tryCoalesce(
 
 	const newFreePages: number[] = []
 	while (true) {
-		// Choose the smaller of the candidate siblings to coalesce with
-		let coalesceSibling: number | undefined
-		let minSiblingLength = Infinity
-		coalesceCandidates.forEach(({length}, i) => {
-			if (length < minSiblingLength) {
-				coalesceSibling = i
-				minSiblingLength = length
-			}
-		})
+		// Choose the smaller of the candidate siblings to coalesce
+		const coalesceSibling = argmin(coalesceCandidates, ({length}) => length)
 
 		// Coalesce with selected sibling
-		const [{sibling}] = coalesceCandidates.splice(coalesceSibling!, 1)
+		const [{sibling}] = coalesceCandidates.splice(coalesceSibling, 1)
 		const {left, siblingIndex, sibling: {page: siblingPage}} = sibling
 		const siblingNode = await getNode(name, siblingPage)
 		if ('inner' in node) {
@@ -390,8 +378,8 @@ export async function set(
 
 export async function size(name: string): Promise<number> {
 	await checkIsList(name)
-	const {child: {size}} = await getHeader(name)
-	return size
+	const {child} = await getHeader(name)
+	return child.size
 }
 
 export async function iter(

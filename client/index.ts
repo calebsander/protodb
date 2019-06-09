@@ -193,6 +193,9 @@ export class ProtoDBClient {
 	async sortedDrop(name: string): Promise<void> {
 		await this.runCommand({sortedDrop: {name}}, voidResponseType)
 	}
+	async sortedDelete(name: string, key: KeyElement[]): Promise<void> {
+		await this.runCommand({sortedDelete: {name, key}}, voidResponseType)
+	}
 	async sortedGet(name: string, key: KeyElement[]): Promise<Item[]> {
 		const {items} = await this.runCommand(
 			{sortedGet: {name, key}},
@@ -207,5 +210,9 @@ export class ProtoDBClient {
 			{sortedInsert: {name, key, value: toUint8Array(value)}},
 			voidResponseType
 		)
+	}
+	async sortedSize(name: string): Promise<number> {
+		const {size} = await this.runCommand({sortedSize: {name}}, sizeResponseType)
+		return size
 	}
 }

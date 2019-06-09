@@ -78,8 +78,10 @@ export type Command
 
 	| {sortedCreate: NameParams}
 	| {sortedDrop: NameParams}
+	| {sortedDelete: NameSortedKeyParams}
 	| {sortedGet: NameSortedKeyParams}
 	| {sortedInsert: NameSortedKeyValueParams}
+	| {sortedSize: NameParams}
 export const commandType = protoFile.lookupType('Command') as Type<Command>
 
 export interface ErrorResponse {

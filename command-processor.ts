@@ -40,7 +40,7 @@ import {
 	voidResponseType
 } from './pb/request'
 
-function errorToString(err: Error): ErrorResponse {
+function makeErrorResponse(err: Error): ErrorResponse {
 	console.error(err)
 	const {name, message} = err
 	return {error: `${name}: ${message}`}
@@ -55,7 +55,7 @@ async function runList(): Promise<ListResponse> {
 		collections = await getCollections as Collections
 	}
 	catch (e) {
-		return errorToString(e)
+		return makeErrorResponse(e)
 	}
 	return {db: {collections}}
 }
@@ -63,63 +63,63 @@ const runItemCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
 		item.create(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runItemDrop =
 	({name}: NameParams): Promise<VoidResponse> =>
 		item.drop(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runItemGet =
 	({name}: NameParams): Promise<BytesResponse> =>
 		item.get(name)
 			.then(data => ({data}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runItemSet =
 	({name, value}: NameValueParams): Promise<VoidResponse> =>
 		item.set(name, value)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
 		hash.create(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashDrop =
 	({name}: NameParams): Promise<VoidResponse> =>
 		hash.drop(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashDelete =
 	({name, key}: NameKeyParams): Promise<VoidResponse> =>
 		hash.remove(name, key)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashGet =
 	({name, key}: NameKeyParams): Promise<OptionalBytesResponse> =>
 		hash.get(name, key)
 			.then<OptionalBytesResponse>(data => data ? {data} : {none: {}})
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashSet =
 	({name, key, value}: NameKeyValueParams): Promise<VoidResponse> =>
 		hash.set(name, key, value)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashSize =
 	({name}: NameParams): Promise<SizeResponse> =>
 		hash.size(name)
 			.then(size => ({size}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runHashIter =
 	({name}: NameParams): Promise<IterResponse> =>
 		hash.iter(name)
 			.then(iter => ({iter}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 function runHashIterBreak({iter}: IterParams): VoidResponse {
 	try {
 		hash.iterBreak(iter)
 	}
 	catch (e) {
-		return errorToString(e)
+		return makeErrorResponse(e)
 	}
 	return {}
 }
@@ -127,53 +127,53 @@ const runHashIterNext =
 	({iter}: IterParams): Promise<OptionalPairResponse> =>
 		hash.iterNext(iter)
 			.then(item => item ? {item} : {})
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
 		list.create(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListDrop =
 	({name}: NameParams): Promise<VoidResponse> =>
 		list.drop(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListDelete =
 	({name, index}: NameOptionalIndexParams): Promise<VoidResponse> =>
 		list.remove(name, getIndex(index))
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListGet =
 	({name, index}: NameIndexParams): Promise<BytesResponse> =>
 		list.get(name, index)
 			.then(data => ({data}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListInsert =
 	({name, index, value}: NameOptionalIndexValueParams): Promise<VoidResponse> =>
 		list.insert(name, getIndex(index), value)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListSet =
 	({name, index, value}: NameIndexValueParams): Promise<VoidResponse> =>
 		list.set(name, index, value)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListSize =
 	({name}: NameParams): Promise<SizeResponse> =>
 		list.size(name)
 			.then(size => ({size}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runListIter =
 	({name, start, end}: NameRangeParams): Promise<IterResponse> =>
 		list.iter(name, getIndex(start), getIndex(end))
 			.then(iter => ({iter}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 function runListIterBreak({iter}: IterParams): VoidResponse {
 	try {
 		list.iterBreak(iter)
 	}
 	catch (e) {
-		return errorToString(e)
+		return makeErrorResponse(e)
 	}
 	return {}
 }
@@ -181,27 +181,37 @@ const runListIterNext =
 	({iter}: IterParams): Promise<OptionalBytesResponse> =>
 		list.iterNext(iter)
 			.then(data => data ? {data} : {none: {}})
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runSortedCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
 		sorted.create(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runSortedDrop =
 	({name}: NameParams): Promise<VoidResponse> =>
 		sorted.drop(name)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
+const runSortedDelete =
+	({name, key}: NameSortedKeyParams): Promise<VoidResponse> =>
+		sorted.remove(name, key)
+			.then(_ => ({}))
+			.catch(makeErrorResponse)
 const runSortedGet =
 	({name, key}: NameSortedKeyParams): Promise<ItemsListResponse> =>
-		sorted.get(name, {elements: key})
+		sorted.get(name, key)
 			.then(items => ({items: {items}}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
 const runSortedInsert =
 	({name, key, value}: NameSortedKeyValueParams): Promise<VoidResponse> =>
-		sorted.insert(name, {elements: key}, value)
+		sorted.insert(name, key, value)
 			.then(_ => ({}))
-			.catch(errorToString)
+			.catch(makeErrorResponse)
+const runSortedSize =
+	({name}: NameParams): Promise<SizeResponse> =>
+		sorted.size(name)
+			.then(size => ({size}))
+			.catch(makeErrorResponse)
 
 async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	const command = commandType.toObject(
@@ -287,11 +297,17 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	else if ('sortedDrop' in command) {
 		writer = voidResponseType.encode(await runSortedDrop(command.sortedDrop))
 	}
+	else if ('sortedDelete' in command) {
+		writer = voidResponseType.encode(await runSortedDelete(command.sortedDelete))
+	}
 	else if ('sortedGet' in command) {
 		writer = itemsListResponseType.encode(await runSortedGet(command.sortedGet))
 	}
 	else if ('sortedInsert' in command) {
 		writer = voidResponseType.encode(await runSortedInsert(command.sortedInsert))
+	}
+	else if ('sortedSize' in command) {
+		writer = sizeResponseType.encode(await runSortedSize(command.sortedSize))
 	}
 	else {
 		const unreachable: never = command
