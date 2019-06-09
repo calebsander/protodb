@@ -148,17 +148,22 @@ async function saveWithOverflow(
 	do {
 		const {page, node, index} = path.pop()!
 		const [parent] = path.slice(-1) as [PathItem] | []
+		const {node: parentNode, index: parentIndex} = parent
+			? parent
+			: {node: undefined, index: undefined}
+		let parentKeys: Key[] | undefined, parentChildren: number[] | undefined
+		if (parentNode) {
+			if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
+			;({keys: parentKeys, children: parentChildren} = parentNode.inner)
+		}
 		if (newMaxKey) {
 			newMaxKey = false
 			if (parent) {
 				const children =
 					'leaf' in node ? node.leaf.values : node.inner.children
 				if (index === children.length - 1) { // changing the maximum element
-					const {node: parentNode, index: parentIndex} = parent
-					if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
-					const {keys} = parentNode.inner
-					if (parentIndex < keys.length) {
-						keys[parentIndex] = {elements: key}
+					if (parentIndex! < parentKeys!.length) {
+						parentKeys![parentIndex!] = {elements: key}
 						newMaxKey = true
 					}
 				}
@@ -208,12 +213,8 @@ async function saveWithOverflow(
 			]
 			// Promote the new key and page to the parent node
 			if (parent) {
-				const parentNode = parent.node
-				if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
-				const {keys, children} = parentNode.inner
-				const insertIndex = parent.index
-				keys.splice(insertIndex, 0, promotedKey)
-				children.splice(insertIndex + 1, 0, newPage)
+				parentKeys!.splice(parentIndex!, 0, promotedKey)
+				parentChildren!.splice(parentIndex! + 1, 0, newPage)
 			}
 			else { // splitting the root node
 				promises.push((async () => {
@@ -283,7 +284,7 @@ async function tryCoalesce(
 		else {
 			leftNode = node
 			rightNode = siblingNode
-			leftIndex-- // sibling is to the right, one index higher
+			leftIndex-- // siblingIndex is to the right, one index too high
 			newFreePages.push(siblingPage)
 		}
 		let newSize: number | undefined
@@ -355,6 +356,7 @@ async function* pairsFrom(
 			const key = keys[index].elements
 			if (end) {
 				const comparison = compareKeys(key, end)
+				// If key is past end, or key is equal to end and the end is exclusive
 				if (comparison > 0 || !(inclusive || comparison)) return
 			}
 			yield {key, value: values[index]}
@@ -433,7 +435,7 @@ export async function get(
 export async function insert(
 	name: string, key: KeyElement[], value: Uint8Array
 ): Promise<void> {
-	if (getUniquifier(key) !== undefined) {
+	if (key.some(element => 'uniquifier' in element)) {
 		throw new Error('Key cannot include uniquifier')
 	}
 	await checkIsSorted(name)

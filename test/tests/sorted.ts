@@ -194,7 +194,7 @@ export default (test: TestInterface<TestContext>) => {
 		await t.context.client.sortedCreate(name)
 		const getKey = (i: number) => [
 			{string: String.fromCharCode('A'.charCodeAt(0) + i % 26).repeat(100)},
-			{int: (i / 26) | 0}
+			{int: ~(i / 26)}
 		]
 		const getValue = (i: number) => new Uint8Array(100).fill(i * i)
 		const elements = new Array(2e3).fill(0).map((_, i) => i)
@@ -205,7 +205,7 @@ export default (test: TestInterface<TestContext>) => {
 			let size = await t.context.client.sortedSize(name)
 			t.deepEqual(size, 2e3)
 			t.deepEqual(await getDepth(t.context, name), 2)
-			t.deepEqual(await getPagesInUse(t.context, name), 194)
+			t.deepEqual(await getPagesInUse(t.context, name), 198)
 			shuffle(elements)
 			for (const i of elements) {
 				const key = getKey(i)
@@ -314,5 +314,75 @@ export default (test: TestInterface<TestContext>) => {
 
 		// Modifications should now succeed
 		await t.context.client.sortedDrop(name)
+	})
+
+	test('sorted-check', async t => {
+		const listName = 'lost', undefinedName = 'absent'
+		await t.context.client.listCreate(listName)
+
+		await Promise.all([listName, undefinedName].map(name =>
+			Promise.all(
+				[
+					() => t.context.client.sortedDrop(name),
+					() => t.context.client.sortedDelete(name, []),
+					() => t.context.client.sortedGet(name, []),
+					() => t.context.client.sortedInsert(name, [], new Uint8Array(3)),
+					() => t.context.client.sortedSize(name),
+					() => t.context.client.sortedIter(name)
+				].map(action => t.throwsAsync(action, {
+					instanceOf: ProtoDBError,
+					message: `Error: Collection ${name} is not a sorted map`
+				}))
+			)
+		))
+
+		const name = 'existing'
+		await t.context.client.sortedCreate(name)
+		await t.throwsAsync(
+			() => t.context.client.sortedCreate(name),
+			{
+				instanceOf: ProtoDBError,
+				message: `Error: Collection ${name} already exists`
+			}
+		)
+
+		const invalidKey = {
+			instanceOf: ProtoDBError,
+			message: 'Error: Key types do not match'
+		}
+		await t.context.client.sortedInsert(name, [{int: 2}], new Uint8Array)
+		await t.throwsAsync(
+			() => t.context.client.sortedInsert(name, [{float: -3}], new Uint8Array),
+			invalidKey
+		)
+		await t.context.client.sortedDelete(name, [])
+
+		await t.context.client.sortedInsert(name, [{float: 1.5}], new Uint8Array)
+		await t.throwsAsync(
+			() => t.context.client.sortedInsert(name, [{string: 'a'}], new Uint8Array),
+			invalidKey
+		)
+		await t.context.client.sortedDelete(name, [])
+
+		await t.context.client.sortedInsert(name, [{string: ''}], new Uint8Array)
+		await t.throwsAsync(
+			() => t.context.client.sortedInsert(name, [{int: 5}], new Uint8Array),
+			invalidKey
+		)
+		await t.context.client.sortedInsert(name, [{string: ''}], new Uint8Array)
+		await t.throwsAsync(
+			() => t.context.client.sortedGet(name, [{string: ''}, {int: 2}]),
+			invalidKey
+		)
+
+		await t.throwsAsync(
+			() => t.context.client.sortedInsert(
+				name, [{uniquifier: 1}, {int: 0}], new Uint8Array
+			),
+			{
+				instanceOf: ProtoDBError,
+				message: 'Error: Key cannot include uniquifier'
+			}
+		)
 	})
 }
