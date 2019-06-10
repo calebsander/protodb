@@ -13,17 +13,7 @@ export class TestContext {
 	private static testIndex = 0
 
 	private readonly index = TestContext.testIndex++
-	private readonly db = spawn(DB_PATH, ['-p', `${this.port}`, '-d', this.dataDir])
-	public readonly ready = new Promise<void>((resolve, reject) => {
-		readline.createInterface(this.db.stdout)
-			.on('line', line => {
-				if (line.startsWith('Listening')) resolve()
-			})
-			.on('error', reject)
-	})
-	private readonly closed = new Promise<void>(resolve =>
-		this.db.on('close', resolve)
-	)
+	private db = this.newDB
 	public readonly client = new ProtoDBClient(this.port)
 
 	private get port() {
@@ -32,10 +22,32 @@ export class TestContext {
 	private get dataDir() {
 		return `test${this.index}-data`
 	}
+	private get newDB() {
+		return spawn(DB_PATH, ['-p', `${this.port}`, '-d', this.dataDir])
+	}
+	private get closed() {
+		return new Promise<void>(resolve => this.db.on('close', resolve))
+	}
+	get ready() {
+		return new Promise<void>((resolve, reject) => {
+			readline.createInterface(this.db.stdout)
+				.on('line', line => {
+					if (line.startsWith('Listening')) resolve()
+				})
+				.on('error', reject)
+		})
+	}
+
 	async close(): Promise<void> {
 		this.db.kill()
 		await this.closed
 		await execPromise(`rm -rf ${this.dataDir}`)
+	}
+	async restart(): Promise<void> {
+		this.db.kill()
+		await this.closed
+		this.db = this.newDB
+		await this.ready
 	}
 	getFile(filename: string): string {
 		return path.join(this.dataDir, filename)

@@ -32,18 +32,6 @@ async function runList() {
     }
     return { db: { collections } };
 }
-const runItemCreate = ({ name }) => item.create(name)
-    .then(_ => ({}))
-    .catch(makeErrorResponse);
-const runItemDrop = ({ name }) => item.drop(name)
-    .then(_ => ({}))
-    .catch(makeErrorResponse);
-const runItemGet = ({ name }) => item.get(name)
-    .then(data => ({ data }))
-    .catch(makeErrorResponse);
-const runItemSet = ({ name, value }) => item.set(name, value)
-    .then(_ => ({}))
-    .catch(makeErrorResponse);
 const runHashCreate = ({ name }) => hash.create(name)
     .then(_ => ({}))
     .catch(makeErrorResponse);
@@ -76,6 +64,18 @@ function runHashIterBreak({ iter }) {
 }
 const runHashIterNext = ({ iter }) => hash.iterNext(iter)
     .then(pair => pair ? { pair } : {})
+    .catch(makeErrorResponse);
+const runItemCreate = ({ name }) => item.create(name)
+    .then(_ => ({}))
+    .catch(makeErrorResponse);
+const runItemDrop = ({ name }) => item.drop(name)
+    .then(_ => ({}))
+    .catch(makeErrorResponse);
+const runItemGet = ({ name }) => item.get(name)
+    .then(data => ({ data }))
+    .catch(makeErrorResponse);
+const runItemSet = ({ name, value }) => item.set(name, value)
+    .then(_ => ({}))
     .catch(makeErrorResponse);
 const runListCreate = ({ name }) => list.create(name)
     .then(_ => ({}))
@@ -248,6 +248,7 @@ async function runCommand(data) {
     else if ('sortedIterNext' in command) {
         writer = request_1.optionalSortedPairResponse.encode(await runSortedIterNext(command.sortedIterNext));
     }
+    // istanbul ignore next
     else {
         const unreachable = command;
         unreachable;

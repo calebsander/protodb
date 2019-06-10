@@ -243,6 +243,14 @@ export default (test: TestInterface<TestContext>) => {
 
 		// No more active iterators, so modifications should succeed
 		await t.context.client.listDelete(name)
+
+		await t.throwsAsync(
+			() => t.context.client.listIterBreak(allIter),
+			{
+				instanceOf: ProtoDBError,
+				message: 'Error: Unknown iterator'
+			}
+		)
 	})
 
 	test('list-check', async t => {

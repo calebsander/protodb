@@ -66,26 +66,6 @@ async function runList(): Promise<ListResponse> {
 	}
 	return {db: {collections}}
 }
-const runItemCreate =
-	({name}: NameParams): Promise<VoidResponse> =>
-		item.create(name)
-			.then(_ => ({}))
-			.catch(makeErrorResponse)
-const runItemDrop =
-	({name}: NameParams): Promise<VoidResponse> =>
-		item.drop(name)
-			.then(_ => ({}))
-			.catch(makeErrorResponse)
-const runItemGet =
-	({name}: NameParams): Promise<BytesResponse> =>
-		item.get(name)
-			.then(data => ({data}))
-			.catch(makeErrorResponse)
-const runItemSet =
-	({name, value}: NameValueParams): Promise<VoidResponse> =>
-		item.set(name, value)
-			.then(_ => ({}))
-			.catch(makeErrorResponse)
 const runHashCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
 		hash.create(name)
@@ -134,6 +114,26 @@ const runHashIterNext =
 	({iter}: IterParams): Promise<OptionalPairResponse> =>
 		hash.iterNext(iter)
 			.then(pair => pair ? {pair} : {})
+			.catch(makeErrorResponse)
+const runItemCreate =
+	({name}: NameParams): Promise<VoidResponse> =>
+		item.create(name)
+			.then(_ => ({}))
+			.catch(makeErrorResponse)
+const runItemDrop =
+	({name}: NameParams): Promise<VoidResponse> =>
+		item.drop(name)
+			.then(_ => ({}))
+			.catch(makeErrorResponse)
+const runItemGet =
+	({name}: NameParams): Promise<BytesResponse> =>
+		item.get(name)
+			.then(data => ({data}))
+			.catch(makeErrorResponse)
+const runItemSet =
+	({name, value}: NameValueParams): Promise<VoidResponse> =>
+		item.set(name, value)
+			.then(_ => ({}))
 			.catch(makeErrorResponse)
 const runListCreate =
 	({name}: NameParams): Promise<VoidResponse> =>
@@ -331,7 +331,9 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		writer = voidResponseType.encode(await runSortedDelete(command.sortedDelete))
 	}
 	else if ('sortedGet' in command) {
-		writer = sortedPairListResponseType.encode(await runSortedGet(command.sortedGet))
+		writer = sortedPairListResponseType.encode(
+			await runSortedGet(command.sortedGet)
+		)
 	}
 	else if ('sortedInsert' in command) {
 		writer = voidResponseType.encode(await runSortedInsert(command.sortedInsert))
@@ -343,13 +345,16 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		writer = iterResponseType.encode(await runSortedIter(command.sortedIter))
 	}
 	else if ('sortedIterBreak' in command) {
-		writer = voidResponseType.encode(await runSortedIterBreak(command.sortedIterBreak))
+		writer = voidResponseType.encode(
+			await runSortedIterBreak(command.sortedIterBreak)
+		)
 	}
 	else if ('sortedIterNext' in command) {
 		writer = optionalSortedPairResponse.encode(
 			await runSortedIterNext(command.sortedIterNext)
 		)
 	}
+	// istanbul ignore next
 	else {
 		const unreachable: never = command
 		unreachable

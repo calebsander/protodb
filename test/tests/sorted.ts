@@ -314,6 +314,14 @@ export default (test: TestInterface<TestContext>) => {
 
 		// Modifications should now succeed
 		await t.context.client.sortedDrop(name)
+
+		await t.throwsAsync(
+			() => t.context.client.sortedIterBreak(iter),
+			{
+				instanceOf: ProtoDBError,
+				message: 'Error: Unknown iterator'
+			}
+		)
 	})
 
 	test('sorted-check', async t => {
