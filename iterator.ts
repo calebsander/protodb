@@ -34,6 +34,7 @@ export class Iterators<STATE> {
 		const {name} = iterator
 		this.iterators.delete(getKey(iter))
 		const oldCount = this.iteratorCounts.get(name)
+		// istanbul ignore if
 		if (!oldCount) throw new Error('Hash has no iterators?')
 		if (oldCount > 1) this.iteratorCounts.set(name, oldCount - 1)
 		else this.iteratorCounts.delete(name)

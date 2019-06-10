@@ -15,6 +15,7 @@ async function cleanup(): Promise<void> {
 		await shutdown()
 	}
 	catch (e) {
+		// istanbul ignore next
 		console.error('Shutdown failed with error:', e)
 	}
 	process.exit()
@@ -24,6 +25,7 @@ async function cleanup(): Promise<void> {
 	await initDB()
 	process
 		.on('exit', code => {
+			// istanbul ignore if
 			if (code) console.error('Cache may not have been flushed')
 		})
 		.on('SIGTERM', cleanup)

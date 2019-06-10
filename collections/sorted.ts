@@ -153,6 +153,7 @@ async function saveWithOverflow(
 			: {node: undefined, index: undefined}
 		let parentKeys: Key[] | undefined, parentChildren: number[] | undefined
 		if (parentNode) {
+			// istanbul ignore if
 			if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
 			;({keys: parentKeys, children: parentChildren} = parentNode.inner)
 		}
@@ -186,6 +187,7 @@ async function saveWithOverflow(
 				const {leaf} = node
 				const {keys, values, next} = leaf
 				const splitIndex = keys.length >> 1
+				// istanbul ignore if
 				if (!splitIndex) throw new Error('Item is too large to store')
 				newNode = {leaf: {
 					keys: keys.splice(splitIndex),
@@ -199,6 +201,7 @@ async function saveWithOverflow(
 			}
 			else {
 				const {keys, children} = node.inner
+				// istanbul ignore if
 				if (keys.length < 2) throw new Error('Item is too large to store')
 				const splitIndex = (keys.length >> 1) + 1
 				newNode = {inner: {
@@ -239,6 +242,7 @@ async function tryCoalesce(
 	if (len >= MIN_NODE_LENGTH) return false // ensure node is sufficiently empty
 
 	const [{node: parentNode, index}] = path.slice(-1)
+	// istanbul ignore if
 	if ('leaf' in parentNode) throw new Error('Parent is not a leaf?')
 	const {keys, children} = parentNode.inner
 	let thisPage = children[index]
@@ -289,6 +293,7 @@ async function tryCoalesce(
 		}
 		let newSize: number | undefined
 		if ('inner' in leftNode) {
+			// istanbul ignore if
 			if ('leaf' in rightNode) throw new Error('Invalid sibling?')
 			const leftInner = leftNode.inner, rightInner = rightNode.inner
 			let newNode = {inner: {
@@ -301,6 +306,7 @@ async function tryCoalesce(
 			node = newNode
 		}
 		else {
+			// istanbul ignore if
 			if ('inner' in rightNode) throw new Error('Invalid sibling?')
 			const leftLeaf = leftNode.leaf, rightLeaf = rightNode.leaf
 			const values = leftLeaf.values.slice()
@@ -350,6 +356,7 @@ async function* pairsFrom(
 	const path = await lookup(name, start)
 	let [{node, index}] = path.slice(-1)
 	while (true) {
+		// istanbul ignore if
 		if ('inner' in node) throw new Error('Not a leaf?')
 		const {keys, values, next} = node.leaf
 		while (index < keys.length) {
@@ -398,6 +405,7 @@ export async function remove(name: string, searchKey: KeyElement[]): Promise<voi
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, searchKey)
 	const [{node, index}] = path.slice(-1)
+	// istanbul ignore if
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	const {keys, values} = node.leaf
 	const oldKey = keys[index] as Key | undefined
@@ -442,6 +450,7 @@ export async function insert(
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, key)
 	const [{node, index}] = path.slice(-1)
+	// istanbul ignore if
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	const {keys, values} = node.leaf
 	const oldKey = keys[index] as Key | undefined

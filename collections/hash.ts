@@ -146,6 +146,7 @@ async function splitBucket(
 				addBucket(name, newBucketPage, {depth, items: items1})
 					.catch(e => {
 						ensureOverflowError(e)
+						// istanbul ignore if
 						if (splitAgain) throw new Error('Both buckets overflowed?')
 						splitAgain = true
 						index = index1
@@ -170,6 +171,7 @@ async function splitBucket(
 			setBucket(name, bucketPage, {depth, items: items0})
 				.catch(e => {
 					ensureOverflowError(e)
+					// istanbul ignore if
 					if (splitAgain) throw new Error('Both buckets overflowed?')
 					splitAgain = true
 					items = items0

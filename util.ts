@@ -11,6 +11,7 @@ export function argmin<T>(arr: T[], keyFunc: (t: T) => number): number {
 			minValue = value
 		}
 	})
+	// istanbul ignore if
 	if (minIndex === undefined) throw new Error('Empty array')
 	return minIndex
 }
@@ -28,6 +29,7 @@ export function concat(buffers: Uint8Array[]): Uint8Array {
 }
 
 export function ensureOverflowError(e: Error) {
+	// istanbul ignore if
 	if (!(e instanceof RangeError && e.message === 'Source is too large')) {
 		throw e // unexpected error; rethrow it
 	}

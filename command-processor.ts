@@ -61,6 +61,7 @@ async function runList(): Promise<ListResponse> {
 		collections = await getCollections as Collections
 	}
 	catch (e) {
+		// istanbul ignore next
 		return makeErrorResponse(e)
 	}
 	return {db: {collections}}

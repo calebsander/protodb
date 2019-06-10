@@ -73,6 +73,7 @@ export async function removeFile(file: string): Promise<void> {
 export async function getPageCount(file: string): Promise<number> {
 	const {fd} = await getFileCache(file)
 	const {size} = await fd.stat()
+	// istanbul ignore if
 	if (getPageOffset(size)) throw new Error(`File ${file} contains a partial page`)
 	return getPageNo(size)
 }

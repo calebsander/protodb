@@ -128,6 +128,7 @@ function getParent(path: PathItem[]) {
 	if (!parent) return undefined
 
 	const {node: parentNode, index} = parent
+	// istanbul ignore if
 	if ('leaf' in parentNode) throw new Error('Parent is not an inner node?')
 	const {children} = parentNode.inner
 	return {children, index}
@@ -224,10 +225,12 @@ async function tryCoalesce(
 		const {left, siblingIndex, sibling: {page: siblingPage}} = sibling
 		const siblingNode = await getNode(name, siblingPage)
 		if ('inner' in node) {
+			// istanbul ignore if
 			if ('leaf' in siblingNode) throw new Error('Invalid sibling?')
 			concat(node.inner.children, siblingNode.inner.children, left)
 		}
 		else {
+			// istanbul ignore if
 			if ('inner' in siblingNode) throw new Error('Invalid sibling?')
 			// Copy sibling's values because they are slices of its page,
 			// which will be overwritten when it gets added to the free list
@@ -325,6 +328,7 @@ export async function remove(name: string, listIndex?: number): Promise<void> {
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex)
 	const [{index, node}] = path.slice(-1)
+	// istanbul ignore if
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	node.leaf.values.splice(index, 1)
 	const header = await getHeader(name)
@@ -349,6 +353,7 @@ export async function get(name: string, listIndex: number): Promise<Uint8Array> 
 	await checkIsList(name)
 	const path = await lookup(name, listIndex)
 	const [{index, node}] = path.slice(-1)
+	// istanbul ignore if
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	return node.leaf.values[index]
 }
@@ -360,6 +365,7 @@ export async function insert(
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex, true)
 	const [{index, node}] = path.slice(-1)
+	// istanbul ignore if
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	node.leaf.values.splice(index, 0, value)
 	await saveWithOverflow(name, path, true)
@@ -372,6 +378,7 @@ export async function set(
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex)
 	const [{index, node}] = path.slice(-1)
+	// istanbul ignore if
 	if ('inner' in node) throw new Error('Path does not end in a leaf?')
 	node.leaf.values[index] = value
 	await saveWithOverflow(name, path, false)

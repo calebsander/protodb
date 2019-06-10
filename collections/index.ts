@@ -29,6 +29,7 @@ export async function addCollection(
 }
 export async function dropCollection(name: string): Promise<void> {
 	const collections = await loadCollections
+	// istanbul ignore if
 	if (!(name in collections)) {
 		throw new Error(`Collection ${name} does not exist`)
 	}

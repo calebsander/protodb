@@ -9,6 +9,7 @@
 		"build-ts": "rm -rf dist && tsc && tsc -p client && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
 		"build-napi": "node-gyp rebuild && mkdir -p dist && mv build/Release/mmap.node dist/mmap-wrapper.node && rm -r build",
 		"build": "npm run build-ts && npm run build-napi",
+		"coveralls": "coveralls < coverage/lcov.info",
 		"prepack": "npm run build-ts",
 		"install": "npm run build-napi",
 		"test": "npm run build && tsc -p test && nyc --reporter=lcov ava --verbose dist/test/main.js"
@@ -27,11 +28,15 @@
 		"@types/node": "^12.0.4",
 		"@types/yargs": "^13.0.0",
 		"ava": "^1.4.1",
+		"coveralls": "^3.0.4",
 		"nyc": "^14.1.1",
 		"typescript": "^3.4.2"
 	},
 	"dependencies": {
 		"protobufjs": "^6.8.8",
 		"yargs": "^13.2.4"
+	},
+	"nyc": {
+		"exclude": "dist/test"
 	}
 }
