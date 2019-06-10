@@ -187,17 +187,10 @@ napi_value mmap_wrapper(napi_env env, napi_callback_info info) {
 
 // Initialize the native module
 napi_value init(napi_env env, napi_value exports) {
-	// Fetch the page size and its base-2 log
-	// Export "LOG_PAGE_SIZE" and "PAGE_SIZE"
+	// Fetch the page size and export "PAGE_SIZE"
 	PAGE_SIZE = getpagesize();
-	napi_value log_page_size;
-	napi_status status =
-		napi_create_uint32(env, __builtin_ctz(PAGE_SIZE), &log_page_size);
-	assert(status == napi_ok);
-	status = napi_set_named_property(env, exports, "LOG_PAGE_SIZE", log_page_size);
-	assert(status == napi_ok);
 	napi_value page_size;
-	status = napi_create_uint32(env, PAGE_SIZE, &page_size);
+	napi_status status = napi_create_uint32(env, PAGE_SIZE, &page_size);
 	assert(status == napi_ok);
 	status = napi_set_named_property(env, exports, "PAGE_SIZE", page_size);
 	assert(status == napi_ok);

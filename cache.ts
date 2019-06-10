@@ -1,6 +1,6 @@
 import {promises as fs} from 'fs'
 import {promisify} from 'util'
-import {LOG_PAGE_SIZE, PAGE_SIZE, mmap} from './mmap-wrapper'
+import {mmap, PAGE_SIZE} from './mmap-wrapper'
 
 export {PAGE_SIZE}
 
@@ -35,12 +35,12 @@ async function loadPage(file: string, page: number): Promise<ArrayBuffer> {
 	const {pages, fd} = await getFileCache(file)
 	let pagePromise = pages.get(page)
 	if (!pagePromise) {
-		pages.set(page, pagePromise = mmapPromise(fd.fd, page << LOG_PAGE_SIZE))
+		pages.set(page, pagePromise = mmapPromise(fd.fd, page * PAGE_SIZE))
 	}
 	return pagePromise
 }
 
-export const getPageNo = (byte: number) => byte >> LOG_PAGE_SIZE
+export const getPageNo = (byte: number) => (byte / PAGE_SIZE) | 0
 export const getPageOffset = (byte: number) => byte & (PAGE_SIZE - 1)
 const pagesToFit = (bytes: number) => getPageNo(bytes + PAGE_SIZE - 1)
 
@@ -58,7 +58,7 @@ export const createFile = (file: string): Promise<void> =>
 	fs.writeFile(file, '', {flag: 'wx'})
 export async function setPageCount(file: string, pages: number): Promise<void> {
 	const {fd} = await getFileCache(file)
-	return fd.truncate(pages << LOG_PAGE_SIZE)
+	return fd.truncate(pages * PAGE_SIZE)
 }
 export async function removeFile(file: string): Promise<void> {
 	const promises = [fs.unlink(file)]
@@ -79,7 +79,7 @@ export async function getPageCount(file: string): Promise<number> {
 export async function getFile(file: string, start = 0, length?: number): Promise<Uint8Array> {
 	if (length === undefined) {
 		const pageCount = await getPageCount(file)
-		length = (pageCount << LOG_PAGE_SIZE) - start
+		length = pageCount * PAGE_SIZE - start
 	}
 	const result = new Uint8Array(length)
 	const pagePromises: Promise<void>[] = []
@@ -119,9 +119,9 @@ export async function setFile(file: string, contents: Uint8Array): Promise<void>
 export async function copyWithinFile(
 	file: string, source: number, length: number, target: number
 ): Promise<void> {
-	const currentLength = await getPageCount(file) << LOG_PAGE_SIZE
+	const currentPages = await getPageCount(file)
 	const newLength = target + length
-	if (newLength > currentLength) {
+	if (newLength > currentPages * PAGE_SIZE) {
 		await setPageCount(file, pagesToFit(newLength))
 	}
 	const pagePromises: Promise<void>[] = []
