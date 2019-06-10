@@ -1,5 +1,11 @@
 .nyc_output
 coverage
+
 data
-dist
+
+dist/**/*.d.ts
+dist/pb/*.proto
+dist/mmap-wrapper.node
+dist/test
+
 node_modules
