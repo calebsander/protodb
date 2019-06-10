@@ -27,6 +27,7 @@ import {CollectionType} from '../pb/interface'
 import {ensureOverflowError} from '../util'
 
 const INITIAL_DEPTH = 0
+const HASH = 'sha1' // the fastest crypto hash
 
 const filename = (name: string, fileType: string) =>
 	path.join(dataDir, `${name}.hash.${fileType}`)
@@ -37,7 +38,7 @@ const equal = (buffer1: Uint8Array, buffer2: Uint8Array): boolean =>
 	!Buffer.from(buffer1).compare(buffer2)
 
 function fullHash(key: Uint8Array): number {
-	const {buffer, byteOffset, length} = createHash('md5').update(key).digest()
+	const {buffer, byteOffset, length} = createHash(HASH).update(key).digest()
 	const hash = new Int32Array(buffer, byteOffset, length >> 2)
 	let hash32 = 0
 	for (const word of hash) hash32 ^= word
