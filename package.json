@@ -1,10 +1,12 @@
 {
-	"name": "protodb",
+	"name": "proto-database",
 	"version": "1.0.0",
-	"description": "ProtoDB",
+	"description": "A structured byte-buffer database",
 	"main": "dist/client/index.js",
 	"typings": "dist/client",
-	"bin": "dist/main.js",
+	"bin": {
+		"protodb": "dist/main.js"
+	},
 	"scripts": {
 		"build-ts": "rm -rf dist && tsc && tsc -p client && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
 		"build-napi": "node-gyp rebuild && mv build/Release/mmap.node dist/mmap-wrapper.node && rm -r build",
@@ -43,6 +45,10 @@
 		"darwin",
 		"linux"
 	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/calebsander/protodb"
+	},
 	"nyc": {
 		"exclude": "dist/test"
 	}
