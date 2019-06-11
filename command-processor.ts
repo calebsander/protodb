@@ -14,7 +14,6 @@ import {
 	NameKeyParams,
 	NameKeyRangeParams,
 	NameKeyValueParams,
-	NameOptionalIndexParams,
 	NameOptionalIndexValueParams,
 	NameRangeParams,
 	NameSortedKeyParams,
@@ -146,8 +145,8 @@ const runListDrop =
 			.then(_ => ({}))
 			.catch(makeErrorResponse)
 const runListDelete =
-	({name, index}: NameOptionalIndexParams): Promise<VoidResponse> =>
-		list.remove(name, getIndex(index))
+	({name, index}: NameIndexParams): Promise<VoidResponse> =>
+		list.remove(name, index)
 			.then(_ => ({}))
 			.catch(makeErrorResponse)
 const runListGet =

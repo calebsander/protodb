@@ -26,7 +26,7 @@ const setNode = (name, page, node) => new cache_1.FilePage(filename(name), page)
 async function lookup(name, index, insert = false) {
     const { child: { size, page } } = await getHeader(name);
     if (index === undefined)
-        index = insert ? size : size - 1;
+        index = size;
     else {
         if (index < -size || index >= size + Number(insert)) {
             throw new Error(`Index ${index} is out of bounds in list of size ${size}`);

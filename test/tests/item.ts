@@ -21,7 +21,7 @@ export default (test: TestInterface<TestContext>) => {
 			() => t.context.client.itemGet(name),
 			{
 				instanceOf: ProtoDBError,
-				message: `Error: Collection ${name} has not been set`
+				message: `Error: Item ${name} has not been set`
 			}
 		)
 		await t.context.client.itemDrop(name)

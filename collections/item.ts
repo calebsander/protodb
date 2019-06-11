@@ -35,7 +35,7 @@ export async function get(name: string): Promise<Uint8Array> {
 		contents = await getFile(filename(name))
 	}
 	catch {
-		throw new Error(`Collection ${name} has not been set`)
+		throw new Error(`Item ${name} has not been set`)
 	}
 	const message = itemType.decodeDelimited(contents)
 	return itemType.toObject(message, {defaults: true}).value

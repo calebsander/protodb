@@ -183,11 +183,8 @@ async function processCommands() {
 				}
 				case 'listDelete': {
 					const [name, index] = args.slice(1) as (string | undefined)[]
-					if (!name) throw new Error(`Syntax: ${type} name [index]`)
-					command = {[type]: {
-						name,
-						index: index ? {value: Number(index)} : {none: {}}
-					}}
+					if (!(name && index)) throw new Error(`Syntax: ${type} name [index]`)
+					command = {[type]: {name, index: Number(index)}}
 					responseType = voidResponseType
 					break
 				}

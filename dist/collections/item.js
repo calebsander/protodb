@@ -34,7 +34,7 @@ async function get(name) {
         contents = await cache_1.getFile(filename(name));
     }
     catch (_a) {
-        throw new Error(`Collection ${name} has not been set`);
+        throw new Error(`Item ${name} has not been set`);
     }
     const message = item_1.itemType.decodeDelimited(contents);
     return item_1.itemType.toObject(message, { defaults: true }).value;

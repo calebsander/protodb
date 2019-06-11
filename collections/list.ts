@@ -59,7 +59,7 @@ const setNode = (name: string, page: number, node: Node): Promise<void> =>
 
 async function lookup(name: string, index?: number, insert = false): Promise<PathItem[]> {
 	const {child: {size, page}} = await getHeader(name)
-	if (index === undefined) index = insert ? size : size - 1
+	if (index === undefined) index = size
 	else {
 		if (index < -size || index >= size + Number(insert)) {
 			throw new Error(`Index ${index} is out of bounds in list of size ${size}`)
@@ -323,7 +323,7 @@ export async function drop(name: string): Promise<void> {
 }
 
 // "delete" is a reserved name, so we use "remove" instead
-export async function remove(name: string, listIndex?: number): Promise<void> {
+export async function remove(name: string, listIndex: number): Promise<void> {
 	await checkIsList(name)
 	iterators.checkNoIterators(name)
 	const path = await lookup(name, listIndex)

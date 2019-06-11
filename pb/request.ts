@@ -29,13 +29,11 @@ export interface IterParams {
 export interface NameIndexParams extends NameParams {
 	index: number
 }
-export interface NameOptionalIndexParams extends NameParams {
-	index: OptionalIndex
-}
 export interface NameIndexValueParams extends NameIndexParams {
 	value: Uint8Array
 }
-export interface NameOptionalIndexValueParams extends NameOptionalIndexParams {
+export interface NameOptionalIndexValueParams extends NameParams {
+	index: OptionalIndex
 	value: Uint8Array
 }
 export interface NameRangeParams extends NameParams {
@@ -73,7 +71,7 @@ export type Command
 
 	| {listCreate: NameParams}
 	| {listDrop: NameParams}
-	| {listDelete: NameOptionalIndexParams}
+	| {listDelete: NameIndexParams}
 	| {listGet: NameIndexParams}
 	| {listInsert: NameOptionalIndexValueParams}
 	| {listSet: NameIndexValueParams}

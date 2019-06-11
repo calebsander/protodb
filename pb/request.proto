@@ -101,7 +101,7 @@ message Command {
 
 		NameParams listCreate = 15;
 		NameParams listDrop = 16;
-		NameOptionalIndexParams listDelete = 17;
+		NameIndexParams listDelete = 17;
 		NameIndexParams listGet = 18;
 		NameOptionalIndexValueParams listInsert = 19;
 		NameIndexValueParams listSet = 20;

@@ -81,14 +81,14 @@ export default (test: TestInterface<TestContext>) => {
 			await t.context.client.listInsert(name, getValue(i * 2 + 1))
 			const popped = await t.context.client.listGet(name, -1)
 			t.deepEqual(popped, getValue(i * 2 + 1))
-			await t.context.client.listDelete(name)
+			await t.context.client.listDelete(name, -1)
 			const size = await t.context.client.listSize(name)
 			t.deepEqual(size, i + 1)
 		}
 		for (let i = 999; i >= 0; i--) {
 			const popped = await t.context.client.listGet(name, -1)
 			t.deepEqual(popped, getValue(i * 2))
-			await t.context.client.listDelete(name)
+			await t.context.client.listDelete(name, -1)
 			const size = await t.context.client.listSize(name)
 			t.deepEqual(size, i)
 		}
@@ -205,7 +205,7 @@ export default (test: TestInterface<TestContext>) => {
 		const tryOperations = () => Promise.all(
 			[
 				() => t.context.client.listDrop(name),
-				() => t.context.client.listDelete(name),
+				() => t.context.client.listDelete(name, 0),
 				() => t.context.client.listInsert(name, new ArrayBuffer(3)),
 				() => t.context.client.listSet(name, 10, new Uint8Array(1))
 			].map(action => t.throwsAsync(action, {
@@ -242,7 +242,7 @@ export default (test: TestInterface<TestContext>) => {
 		await t.context.client.listIterBreak(allIter)
 
 		// No more active iterators, so modifications should succeed
-		await t.context.client.listDelete(name)
+		await t.context.client.listDelete(name, 0)
 
 		await t.throwsAsync(
 			() => t.context.client.listIterBreak(allIter),
@@ -261,7 +261,7 @@ export default (test: TestInterface<TestContext>) => {
 			Promise.all(
 				[
 					() => t.context.client.listDrop(name),
-					() => t.context.client.listDelete(name),
+					() => t.context.client.listDelete(name, 0),
 					() => t.context.client.listGet(name, 0),
 					() => t.context.client.listInsert(name, new Uint8Array),
 					() => t.context.client.listSet(name, 0, new ArrayBuffer(0)),

@@ -83,7 +83,7 @@ const runListCreate = ({ name }) => list.create(name)
 const runListDrop = ({ name }) => list.drop(name)
     .then(_ => ({}))
     .catch(makeErrorResponse);
-const runListDelete = ({ name, index }) => list.remove(name, getIndex(index))
+const runListDelete = ({ name, index }) => list.remove(name, index)
     .then(_ => ({}))
     .catch(makeErrorResponse);
 const runListGet = ({ name, index }) => list.get(name, index)
