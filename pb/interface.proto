@@ -1,0 +1,30 @@
+// Messages common to database files and the TCP protocol
+
+syntax = "proto3";
+
+enum CollectionType {
+	ITEM = 0;
+	HASH = 1;
+	LIST = 2;
+	SORTED = 3;
+}
+message DB {
+	map<string, CollectionType> collections = 1;
+}
+
+message KeyValuePair {
+	bytes key = 1;
+	bytes value = 2;
+}
+
+message KeyElement {
+	oneof element {
+		sint32 int = 1;
+		float float = 2;
+		string string = 3;
+		uint64 uniquifier = 4;
+	}
+}
+message Key {
+	repeated KeyElement elements = 1;
+}

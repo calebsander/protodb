@@ -10,6 +10,8 @@ export interface Child {
 }
 export const childType = protoFile.lookupType('Child') as Type<Child>
 
+// Value of FreePage.next at the end of the free list.
+// 0 is the page containing the header, which is always in use.
 export const FREE_LIST_END = 0
 export interface FreePage {
 	next: number

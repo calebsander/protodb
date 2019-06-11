@@ -10,18 +10,6 @@ message Header {
 	FreePage freePage = 3;
 }
 
-message KeyElement {
-	oneof element {
-		sint32 int = 1;
-		float float = 2;
-		string string = 3;
-		uint64 uniquifier = 4;
-	}
-}
-message Key {
-	repeated KeyElement elements = 1;
-}
-
 message InnerNode {
 	repeated Key keys = 1;
 	repeated uint32 children = 2;

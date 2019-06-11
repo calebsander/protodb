@@ -1,6 +1,7 @@
 import yargs = require('yargs')
 import {DEFAULT_DATA_DIR, DEFAULT_PORT} from './constants'
 
+// Parses the command line options to configure the data directory and TCP port
 export const {dataDir, port} = yargs.options({
 	dataDir: {
 		alias: 'd',

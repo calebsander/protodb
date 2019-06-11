@@ -9,20 +9,26 @@ const iterator_1 = require("../iterator");
 const hash_1 = require("../pb/hash");
 const interface_1 = require("../pb/interface");
 const util_1 = require("../util");
+// Number of bits of hash to consider initially (only 1 bucket)
 const INITIAL_DEPTH = 0;
-const HASH = 'sha1'; // the fastest crypto hash
+// crypto hashing algorithm to use, chosen because it's the fastest to compute
+const HASH = 'sha1';
 const filename = (name, fileType) => path.join(args_1.dataDir, `${name}.hash.${fileType}`);
 const directoryFilename = (name) => filename(name, 'directory');
 const bucketsFilename = (name) => filename(name, 'buckets');
-const equal = (buffer1, buffer2) => !Buffer.from(buffer1).compare(buffer2);
+const equal = (buffer1, buffer2) => !Buffer.from(buffer1.buffer, buffer1.byteOffset, buffer1.length)
+    .compare(buffer2);
+// Computes the unmasked hash of a key
 function fullHash(key) {
     const { buffer, byteOffset, length } = crypto_1.createHash(HASH).update(key).digest();
+    // Break the hash into 32-bit ints and xor them
     const hash = new Int32Array(buffer, byteOffset, length >> 2);
     let hash32 = 0;
     for (const word of hash)
         hash32 ^= word;
     return hash32;
 }
+// Computes the bits of the hash used to find the bucket at a given depth
 const depthHash = (hash, depth) => hash & ((1 << depth) - 1);
 async function checkIsHash(name) {
     const collections = await _1.getCollections;
@@ -45,20 +51,25 @@ async function addBucket(name, page, bucket) {
     await cache_1.setPageCount(bucketsFilename(name), page + 1);
     await setBucket(name, page, bucket);
 }
+// Gets the position in the directory file of a given bucket index
 const locateBucketIndex = (bucket) => hash_1.HEADER_BYTES + bucket * hash_1.BUCKET_INDEX_BYTES;
+// Gets the page of the buckets file storing a given bucket index
 async function getBucketPage(name, bucket) {
     const offset = locateBucketIndex(bucket);
     const contents = await cache_1.getFile(directoryFilename(name), offset, hash_1.BUCKET_INDEX_BYTES);
     return hash_1.bucketIndexType.toObject(hash_1.bucketIndexType.decode(contents)).page;
 }
+// Sets a given bucket index to point to a given page of the buckets file
 const setBucketPage = (name, bucket, page) => cache_1.setFileSegment(directoryFilename(name), hash_1.bucketIndexType.encode({ page }).finish(), locateBucketIndex(bucket), hash_1.BUCKET_INDEX_BYTES);
+// Duplicates the directory, incrementing the depth
 async function extendDirectory(name, header) {
     const { depth } = header;
     const indexBytes = hash_1.BUCKET_INDEX_BYTES << depth;
-    const doubleDirectory = cache_1.copyWithinFile(directoryFilename(name), hash_1.HEADER_BYTES, indexBytes, hash_1.HEADER_BYTES + indexBytes);
+    await cache_1.copyWithinFile(directoryFilename(name), hash_1.HEADER_BYTES, indexBytes, hash_1.HEADER_BYTES + indexBytes);
     header.depth = depth + 1;
-    await Promise.all([doubleDirectory, setHeader(name, header)]);
 }
+// Splits a bucket until it no longer overflows a page;
+// return whether the global depth changed
 async function splitBucket(name, index, bucketPage, { depth, items }, header) {
     // Copy the keys and values because they are slices of the old page,
     // which will be overwritten
@@ -66,11 +77,15 @@ async function splitBucket(name, index, bucketPage, { depth, items }, header) {
         item.key = item.key.slice();
         item.value = item.value.slice();
     }
-    let splitAgain = true;
-    while (splitAgain) {
+    // May need to repeatedly split if keys happen to end up in the same half
+    let splitAgain;
+    let depthChanged = false;
+    do {
         // Grow directory if necessary
-        if (depth === header.depth)
+        if (depth === header.depth) {
             await extendDirectory(name, header);
+            depthChanged = true;
+        }
         // Split bucket
         const index1 = index | 1 << depth++;
         const items0 = [], items1 = [];
@@ -116,8 +131,10 @@ async function splitBucket(name, index, bucketPage, { depth, items }, header) {
             }),
             makeNewBucket()
         ]);
-    }
+    } while (splitAgain);
+    return depthChanged;
 }
+// Generates all the key-value pairs in the hash
 async function* hashEntries(name) {
     const buckets = await cache_1.getPageCount(bucketsFilename(name));
     for (let i = 0; i < buckets; i++) {
@@ -196,6 +213,7 @@ async function set(name, key, value) {
     const bucketIndex = depthHash(hash, header.depth);
     const bucketPage = await getBucketPage(name, bucketIndex);
     const bucket = await getBucket(name, bucketPage);
+    // Update value corresponding to key, or add new key-value pair
     const { items } = bucket;
     let newKey = true;
     for (const item of items) {
@@ -208,15 +226,18 @@ async function set(name, key, value) {
     if (newKey) {
         items.push({ key, value });
         header.size++;
-        await setHeader(name, header);
     }
+    let depthChanged = false;
     try {
         await setBucket(name, bucketPage, bucket);
     }
     catch (e) { // bucket is full
         util_1.ensureOverflowError(e);
-        await splitBucket(name, depthHash(hash, bucket.depth), bucketPage, bucket, header);
+        depthChanged = await splitBucket(name, depthHash(hash, bucket.depth), bucketPage, bucket, header);
     }
+    // Only write header if it was modified
+    if (newKey || depthChanged)
+        await setHeader(name, header);
 }
 exports.set = set;
 async function size(name) {

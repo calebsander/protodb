@@ -4,31 +4,34 @@ const crypto_1 = require("crypto");
 const util_1 = require("util");
 const constants_1 = require("./constants");
 const randomBytesPromise = util_1.promisify(crypto_1.randomBytes);
-const getKey = (iter) => Buffer.from(iter.buffer, iter.byteOffset, iter.byteLength).toString('hex');
+// Converts a 16-byte iterator handle to a string for use as a Map key
+const getKey = (iter) => Buffer.from(iter.buffer, iter.byteOffset, iter.length).toString('hex');
 class Iterators {
     constructor() {
+        // Maps iterator handles to their associated iterators
         this.iterators = new Map();
+        // Maps collection names to their number of active iterators
         this.iteratorCounts = new Map();
     }
-    async registerIterator(name, iterator) {
-        this.iteratorCounts.set(name, (this.iteratorCounts.get(name) || 0) + 1);
-        const iter = await randomBytesPromise(constants_1.ITER_BYTE_LENGTH);
-        this.iterators.set(getKey(iter), { name, iterator });
-        return iter;
-    }
-    getIterator(iter) {
-        const iterator = this.iterators.get(getKey(iter));
-        if (!iterator)
-            throw new Error('Unknown iterator');
-        return iterator.iterator;
-    }
-    closeIterator(iter) {
-        const key = getKey(iter);
+    lookupIterator(key) {
         const iterator = this.iterators.get(key);
         if (!iterator)
             throw new Error('Unknown iterator');
-        const { name } = iterator;
-        this.iterators.delete(getKey(iter));
+        return iterator;
+    }
+    async registerIterator(name, iterator) {
+        const iter = await randomBytesPromise(constants_1.ITER_BYTE_LENGTH);
+        this.iterators.set(getKey(iter), { name, iterator });
+        this.iteratorCounts.set(name, (this.iteratorCounts.get(name) || 0) + 1);
+        return iter;
+    }
+    getIterator(iter) {
+        return this.lookupIterator(getKey(iter)).iterator;
+    }
+    closeIterator(iter) {
+        const key = getKey(iter);
+        const { name } = this.lookupIterator(key);
+        this.iterators.delete(key);
         const oldCount = this.iteratorCounts.get(name);
         // istanbul ignore if
         if (!oldCount)

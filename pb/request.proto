@@ -151,10 +151,6 @@ message OptionalBytesResponse {
 	}
 }
 
-message KeyValuePair {
-	bytes key = 1;
-	bytes value = 2;
-}
 message OptionalPairResponse {
 	oneof response {
 		string error = 1;

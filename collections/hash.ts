@@ -15,7 +15,6 @@ import {
 import {Iterators} from '../iterator'
 import {
 	Bucket,
-	BucketItem,
 	BUCKET_INDEX_BYTES,
 	bucketIndexType,
 	bucketType,
@@ -23,27 +22,33 @@ import {
 	Header,
 	headerType
 } from '../pb/hash'
-import {CollectionType} from '../pb/interface'
+import {CollectionType, KeyValuePair} from '../pb/interface'
 import {ensureOverflowError} from '../util'
 
+// Number of bits of hash to consider initially (only 1 bucket)
 const INITIAL_DEPTH = 0
-const HASH = 'sha1' // the fastest crypto hash
+// crypto hashing algorithm to use, chosen because it's the fastest to compute
+const HASH = 'sha1'
 
-const filename = (name: string, fileType: string) =>
+const filename = (name: string, fileType: string): string =>
 	path.join(dataDir, `${name}.hash.${fileType}`)
-const directoryFilename = (name: string) => filename(name, 'directory')
-const bucketsFilename = (name: string) => filename(name, 'buckets')
+const directoryFilename = (name: string): string => filename(name, 'directory')
+const bucketsFilename = (name: string): string => filename(name, 'buckets')
 
 const equal = (buffer1: Uint8Array, buffer2: Uint8Array): boolean =>
-	!Buffer.from(buffer1).compare(buffer2)
+	!Buffer.from(buffer1.buffer, buffer1.byteOffset, buffer1.length)
+		.compare(buffer2)
 
+// Computes the unmasked hash of a key
 function fullHash(key: Uint8Array): number {
 	const {buffer, byteOffset, length} = createHash(HASH).update(key).digest()
+	// Break the hash into 32-bit ints and xor them
 	const hash = new Int32Array(buffer, byteOffset, length >> 2)
 	let hash32 = 0
 	for (const word of hash) hash32 ^= word
 	return hash32
 }
+// Computes the bits of the hash used to find the bucket at a given depth
 const depthHash = (hash: number, depth: number): number =>
 	hash & ((1 << depth) - 1)
 
@@ -83,57 +88,68 @@ async function addBucket(name: string, page: number, bucket: Bucket): Promise<vo
 	await setBucket(name, page, bucket)
 }
 
+// Gets the position in the directory file of a given bucket index
 const locateBucketIndex = (bucket: number): number =>
 	HEADER_BYTES + bucket * BUCKET_INDEX_BYTES
+// Gets the page of the buckets file storing a given bucket index
 async function getBucketPage(name: string, bucket: number): Promise<number> {
 	const offset = locateBucketIndex(bucket)
 	const contents =
 		await getFile(directoryFilename(name), offset, BUCKET_INDEX_BYTES)
 	return bucketIndexType.toObject(bucketIndexType.decode(contents)).page
 }
-const setBucketPage = (name: string, bucket: number, page: number): Promise<void> =>
-	setFileSegment(
-		directoryFilename(name),
-		bucketIndexType.encode({page}).finish(),
-		locateBucketIndex(bucket),
-		BUCKET_INDEX_BYTES
-	)
+// Sets a given bucket index to point to a given page of the buckets file
+const setBucketPage =
+	(name: string, bucket: number, page: number): Promise<void> =>
+		setFileSegment(
+			directoryFilename(name),
+			bucketIndexType.encode({page}).finish(),
+			locateBucketIndex(bucket),
+			BUCKET_INDEX_BYTES
+		)
 
+// Duplicates the directory, incrementing the depth
 async function extendDirectory(name: string, header: Header): Promise<void> {
 	const {depth} = header
 	const indexBytes = BUCKET_INDEX_BYTES << depth
-	const doubleDirectory = copyWithinFile(
+	await copyWithinFile(
 		directoryFilename(name),
 		HEADER_BYTES,
 		indexBytes,
 		HEADER_BYTES + indexBytes
 	)
 	header.depth = depth + 1
-	await Promise.all([doubleDirectory, setHeader(name, header)])
 }
 
+// Splits a bucket until it no longer overflows a page;
+// return whether the global depth changed
 async function splitBucket(
 	name: string,
 	index: number,
 	bucketPage: number,
 	{depth, items}: Bucket,
 	header: Header
-) {
+): Promise<boolean> {
 	// Copy the keys and values because they are slices of the old page,
 	// which will be overwritten
 	for (const item of items) {
 		item.key = item.key.slice()
 		item.value = item.value.slice()
 	}
-	let splitAgain = true
-	while (splitAgain) {
+	// May need to repeatedly split if keys happen to end up in the same half
+	let splitAgain: boolean
+	let depthChanged = false
+	do {
 		// Grow directory if necessary
-		if (depth === header.depth) await extendDirectory(name, header)
+		if (depth === header.depth) {
+			await extendDirectory(name, header)
+			depthChanged = true
+		}
 
 		// Split bucket
 		const index1 = index | 1 << depth++
-		const items0: BucketItem[] = [],
-		      items1: BucketItem[] = []
+		const items0: KeyValuePair[] = [],
+		      items1: KeyValuePair[] = []
 		for (const item of items) {
 			(depthHash(fullHash(item.key), depth) === index ? items0 : items1)
 				.push(item)
@@ -178,17 +194,19 @@ async function splitBucket(
 				}),
 			makeNewBucket()
 		])
-	}
+	} while (splitAgain)
+	return depthChanged
 }
 
-async function* hashEntries(name: string): AsyncIterator<BucketItem> {
+// Generates all the key-value pairs in the hash
+async function* hashEntries(name: string): AsyncIterator<KeyValuePair> {
 	const buckets = await getPageCount(bucketsFilename(name))
 	for (let i = 0; i < buckets; i++) {
 		const {items} = await getBucket(name, i)
 		yield* items
 	}
 }
-const iterators = new Iterators<AsyncIterator<BucketItem>>()
+const iterators = new Iterators<AsyncIterator<KeyValuePair>>()
 
 export async function create(name: string): Promise<void> {
 	await addCollection(name, CollectionType.HASH)
@@ -261,6 +279,7 @@ export async function set(
 	const bucketIndex = depthHash(hash, header.depth)
 	const bucketPage = await getBucketPage(name, bucketIndex)
 	const bucket = await getBucket(name, bucketPage)
+	// Update value corresponding to key, or add new key-value pair
 	const {items} = bucket
 	let newKey = true
 	for (const item of items) {
@@ -273,18 +292,20 @@ export async function set(
 	if (newKey) {
 		items.push({key, value})
 		header.size++
-		await setHeader(name, header)
 	}
 
+	let depthChanged = false
 	try {
 		await setBucket(name, bucketPage, bucket)
 	}
 	catch (e) { // bucket is full
 		ensureOverflowError(e)
-		await splitBucket(
+		depthChanged = await splitBucket(
 			name, depthHash(hash, bucket.depth), bucketPage, bucket, header
 		)
 	}
+	// Only write header if it was modified
+	if (newKey || depthChanged) await setHeader(name, header)
 }
 
 export async function size(name: string): Promise<number> {
@@ -301,7 +322,7 @@ export async function iter(name: string): Promise<Uint8Array> {
 export const iterBreak = (iter: Uint8Array): void =>
 	iterators.closeIterator(iter)
 
-export async function iterNext(iter: Uint8Array): Promise<BucketItem | null> {
+export async function iterNext(iter: Uint8Array): Promise<KeyValuePair | null> {
 	const iterator = iterators.getIterator(iter)
 	const {value, done} = await iterator.next()
 	if (done) {

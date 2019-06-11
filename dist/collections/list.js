@@ -23,10 +23,31 @@ const getHeader = (name) => new cache_1.FilePage(filename(name), HEADER_PAGE).us
 const setHeader = (name, header) => new cache_1.FilePage(filename(name), HEADER_PAGE).use(async (page) => new Uint8Array(page).set(list_1.headerType.encodeDelimited(header).finish()));
 const getNode = (name, page) => new cache_1.FilePage(filename(name), page).use(async (page) => list_1.nodeType.toObject(list_1.nodeType.decodeDelimited(new Uint8Array(page)), { defaults: true, longs: Number }));
 const setNode = (name, page, node) => new cache_1.FilePage(filename(name), page).use(async (page) => new Uint8Array(page).set(list_1.nodeType.encodeDelimited(node).finish()));
-async function lookup(name, index, insert = false) {
-    const { child: { size, page } } = await getHeader(name);
+// Obtains a free page from the free list, or by extending the file.
+// Not atomic, so only one call should be performed at a time.
+async function getFreePage(name, header) {
+    const file = filename(name);
+    const freePage = header.freePage.next;
+    if (freePage === list_1.FREE_LIST_END) {
+        const pages = await cache_1.getPageCount(file);
+        await cache_1.setPageCount(file, pages + 1);
+        return pages;
+    }
+    else {
+        header.freePage = await new cache_1.FilePage(file, freePage).use(async (page) => list_1.freePageType.toObject(list_1.freePageType.decodeDelimited(new Uint8Array(page))));
+        return freePage;
+    }
+}
+// Atomically adds a free page to the front of the free list
+const addFreePage = (name, header, pageNo) => new cache_1.FilePage(filename(name), pageNo).use(async (page) => {
+    const { freePage } = header;
+    new Uint8Array(page).set(list_1.freePageType.encodeDelimited(freePage).finish());
+    freePage.next = pageNo;
+});
+// Performs the tree lookup, traversing the path to the leaf
+async function lookup(name, { child: { size, page } }, index, insert = false) {
     if (index === undefined)
-        index = size;
+        index = size; // inserting at the end of the list
     else {
         if (index < -size || index >= size + Number(insert)) {
             throw new Error(`Index ${index} is out of bounds in list of size ${size}`);
@@ -41,7 +62,8 @@ async function lookup(name, index, insert = false) {
         const pathItem = { page: lookupPage, index, node };
         path.push(pathItem);
         if ('leaf' in node)
-            break;
+            return path; // at the end of the path
+        // Find the child containing the search index
         let nodeIndex = 0;
         for (const { size, page } of node.inner.children) {
             if (index < size || insert && index === size) {
@@ -53,36 +75,22 @@ async function lookup(name, index, insert = false) {
         }
         pathItem.index = nodeIndex;
     }
-    return path;
 }
-async function getFreePage(name, header) {
-    const file = filename(name);
-    const freePage = header.freePage.next;
-    if (freePage === list_1.FREE_LIST_END) {
-        const pages = await cache_1.getPageCount(file);
-        await cache_1.setPageCount(file, pages + 1);
-        return pages;
-    }
-    else {
-        header.freePage = await new cache_1.FilePage(file, freePage).use(async (page) => list_1.freePageType.toObject(list_1.freePageType.decodeDelimited(new Uint8Array(page))));
-        return freePage;
-    }
-}
-const addFreePage = (name, header, pageNo) => new cache_1.FilePage(filename(name), pageNo).use(async (page) => {
-    const { freePage } = header;
-    new Uint8Array(page).set(list_1.freePageType.encodeDelimited(freePage).finish());
-    freePage.next = pageNo;
-});
+// Removes and returns the right half of an array
 const split = (arr) => arr.splice(arr.length >> 1);
+// Appends another array to the left or right of an array
 function concat(arr, other, left) {
     if (left)
         arr.unshift(...other);
     else
         arr.push(...other);
 }
+// Returns the length of the sublist under a node
 const nodeSize = (node) => 'inner' in node
     ? node.inner.children.reduce((totalSize, { size }) => totalSize + size, 0)
     : node.leaf.values.length;
+// Extracts information about the parent of the current node
+// from its path (with the current node popped off)
 function getParent(path) {
     const [parent] = path.slice(-1);
     if (!parent)
@@ -94,8 +102,10 @@ function getParent(path) {
     const { children } = parentNode.inner;
     return { children, index };
 }
-async function saveWithOverflow(name, path, insert) {
-    const header = await getHeader(name);
+// Saves a node and any of its ancestors that need saving,
+// handling any overflows that occur
+async function saveWithOverflow(name, path, header, insert) {
+    let madeSplit = false;
     while (path.length) {
         const { page, node } = path.pop();
         const parent = getParent(path);
@@ -109,17 +119,17 @@ async function saveWithOverflow(name, path, insert) {
                 }
             }
             else
-                break;
+                break; // ancestor sizes don't need updating, so we're done
         }
         catch (e) {
             // Node overflowed
             util_1.ensureOverflowError(e);
             // TODO: this doesn't split leaves evenly
-            const newNode = 'inner' in node
-                ? { inner: { children: split(node.inner.children) } }
+            const newNode = 'leaf' in node
                 // Make copies of values since they are slices of the old page,
                 // which will be overwritten
-                : { leaf: { values: split(node.leaf.values).map(value => value.slice()) } };
+                ? { leaf: { values: split(node.leaf.values).map(value => value.slice()) } }
+                : { inner: { children: split(node.inner.children) } };
             const newPage = await getFreePage(name, header);
             const children = [
                 { size: nodeSize(node), page },
@@ -129,7 +139,7 @@ async function saveWithOverflow(name, path, insert) {
                 setNode(name, page, node),
                 setNode(name, newPage, newNode)
             ];
-            if (parent) {
+            if (parent) { // replace the 1 child in the parent with 2
                 parent.children.splice(parent.index, 1, ...children);
             }
             else { // splitting the root node
@@ -140,12 +150,16 @@ async function saveWithOverflow(name, path, insert) {
                 })());
             }
             await Promise.all(promises);
+            madeSplit = true;
         }
     }
     if (insert)
         header.child.size++;
-    await setHeader(name, header);
+    // Only write header if necessary
+    if (insert || madeSplit)
+        await setHeader(name, header);
 }
+// Tries to coalesce a node with its siblings; returns whether successful
 async function tryCoalesce(name, node, path, header) {
     const parent = getParent(path);
     if (!parent)
@@ -153,6 +167,7 @@ async function tryCoalesce(name, node, path, header) {
     const { len } = list_1.nodeType.encodeDelimited(node);
     if (len >= MIN_NODE_LENGTH)
         return false; // ensure node is sufficiently empty
+    // Find possible siblings to coalesce with
     const { children, index } = parent;
     const thisChild = children[index];
     const file = filename(name);
@@ -178,19 +193,19 @@ async function tryCoalesce(name, node, path, header) {
         const [{ sibling }] = coalesceCandidates.splice(coalesceSibling, 1);
         const { left, siblingIndex, sibling: { page: siblingPage } } = sibling;
         const siblingNode = await getNode(name, siblingPage);
-        if ('inner' in node) {
-            // istanbul ignore if
-            if ('leaf' in siblingNode)
-                throw new Error('Invalid sibling?');
-            concat(node.inner.children, siblingNode.inner.children, left);
-        }
-        else {
+        if ('leaf' in node) { // coalescing leaf nodes
             // istanbul ignore if
             if ('inner' in siblingNode)
                 throw new Error('Invalid sibling?');
             // Copy sibling's values because they are slices of its page,
             // which will be overwritten when it gets added to the free list
             concat(node.leaf.values, siblingNode.leaf.values.map(value => value.slice()), left);
+        }
+        else { // coalescing inner nodes
+            // istanbul ignore if
+            if ('leaf' in siblingNode)
+                throw new Error('Invalid sibling?');
+            concat(node.inner.children, siblingNode.inner.children, left);
         }
         newFreePages.push(siblingPage);
         // Remove sibling from parent
@@ -219,6 +234,7 @@ async function tryCoalesce(name, node, path, header) {
     await Promise.all(promises);
     return true;
 }
+// Recursively generates the entries of a sublist within a given index range
 async function* sublistEntries(name, page, start, end) {
     const node = await getNode(name, page);
     if ('inner' in node) {
@@ -240,17 +256,14 @@ async function* sublistEntries(name, page, start, end) {
 }
 async function* listEntries(name, start, end) {
     const { child: { page, size } } = await getHeader(name);
-    start = start || 0;
-    if (end === undefined)
-        end = size;
-    yield* sublistEntries(name, page, start, end);
+    yield* sublistEntries(name, page, start || 0, end === undefined ? size : end);
 }
 const iterators = new iterator_1.Iterators();
 async function create(name) {
     await _1.addCollection(name, interface_1.CollectionType.LIST);
     const file = filename(name);
     await cache_1.createFile(file);
-    await cache_1.setPageCount(file, 2);
+    await cache_1.setPageCount(file, 2); // allocate the header page and root node
     await Promise.all([
         setHeader(name, {
             child: { size: 0, page: INITIAL_ROOT_PAGE },
@@ -270,13 +283,14 @@ exports.drop = drop;
 async function remove(name, listIndex) {
     await checkIsList(name);
     iterators.checkNoIterators(name);
-    const path = await lookup(name, listIndex);
+    const header = await getHeader(name);
+    const path = await lookup(name, header, listIndex);
     const [{ index, node }] = path.slice(-1);
     // istanbul ignore if
     if ('inner' in node)
         throw new Error('Path does not end in a leaf?');
     node.leaf.values.splice(index, 1);
-    const header = await getHeader(name);
+    // Save leaf and all its ancestors
     let coalesced = true;
     while (path.length) {
         const { page, node } = path.pop();
@@ -296,7 +310,8 @@ async function remove(name, listIndex) {
 exports.remove = remove;
 async function get(name, listIndex) {
     await checkIsList(name);
-    const path = await lookup(name, listIndex);
+    const header = await getHeader(name);
+    const path = await lookup(name, header, listIndex);
     const [{ index, node }] = path.slice(-1);
     // istanbul ignore if
     if ('inner' in node)
@@ -307,25 +322,27 @@ exports.get = get;
 async function insert(name, listIndex, value) {
     await checkIsList(name);
     iterators.checkNoIterators(name);
-    const path = await lookup(name, listIndex, true);
+    const header = await getHeader(name);
+    const path = await lookup(name, header, listIndex, true);
     const [{ index, node }] = path.slice(-1);
     // istanbul ignore if
     if ('inner' in node)
         throw new Error('Path does not end in a leaf?');
     node.leaf.values.splice(index, 0, value);
-    await saveWithOverflow(name, path, true);
+    await saveWithOverflow(name, path, header, true);
 }
 exports.insert = insert;
 async function set(name, listIndex, value) {
     await checkIsList(name);
     iterators.checkNoIterators(name);
-    const path = await lookup(name, listIndex);
+    const header = await getHeader(name);
+    const path = await lookup(name, header, listIndex);
     const [{ index, node }] = path.slice(-1);
     // istanbul ignore if
     if ('inner' in node)
         throw new Error('Path does not end in a leaf?');
     node.leaf.values[index] = value;
-    await saveWithOverflow(name, path, false);
+    await saveWithOverflow(name, path, header, false);
 }
 exports.set = set;
 async function size(name) {

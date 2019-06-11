@@ -14,10 +14,7 @@ async function checkIsItem(name) {
         throw new Error(`Collection ${name} is not an item`);
     }
 }
-function create(name) {
-    return _1.addCollection(name, interface_1.CollectionType.ITEM);
-}
-exports.create = create;
+exports.create = (name) => _1.addCollection(name, interface_1.CollectionType.ITEM);
 async function drop(name) {
     await checkIsItem(name);
     await Promise.all([

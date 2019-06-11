@@ -4,8 +4,7 @@ import {Type} from './common'
 import {DB, Key, KeyElement, KeyValuePair, SortedKeyValuePair} from './interface'
 
 const protoFile = protobuf.loadSync(
-	['request.proto', 'db.proto', 'sorted.proto']
-		.map(file => path.join(__dirname, file))
+	['interface.proto', 'request.proto'].map(file => path.join(__dirname, file))
 )
 
 export type OptionalIndex = {none: {}} | {value: number}

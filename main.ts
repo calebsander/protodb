@@ -5,7 +5,6 @@ import net = require('net')
 import {dataDir, port} from './args'
 import {shutdown} from './cache'
 import {executeCommand} from './command-processor'
-import {concat} from './util'
 
 const initDB = (): Promise<void> =>
 	fs.mkdir(dataDir).catch(_ => {}) // not a problem if it already exists
@@ -35,7 +34,7 @@ async function cleanup(): Promise<void> {
 		connection
 			.on('data', chunk => chunks.push(chunk))
 			.on('end', async () =>
-				connection.end(await executeCommand(concat(chunks)))
+				connection.end(await executeCommand(Buffer.concat(chunks)))
 			)
 	}).listen(port)
 	console.log(`Listening on port ${port}`)

@@ -2,6 +2,7 @@ import {promises as fs} from 'fs'
 import {promisify} from 'util'
 import {mmap, PAGE_SIZE} from './mmap-wrapper'
 
+// Re-export PAGE_SIZE so other modules don't include mmap-wrapper directly
 export {PAGE_SIZE}
 
 const mmapPromise = promisify(mmap)
@@ -50,6 +51,8 @@ export class FilePage {
 	constructor(readonly file: string, readonly page: number) {}
 
 	async use<T>(consumer: PageConsumer<T>): Promise<T> {
+		// We wrap the call to the consumer in case pinning is added later,
+		// in which case we would need to insert pin() and unpin() calls here
 		return consumer(await loadPage(this.file, this.page))
 	}
 }
@@ -58,7 +61,7 @@ export const createFile = (file: string): Promise<void> =>
 	fs.writeFile(file, '', {flag: 'wx'})
 export async function setPageCount(file: string, pages: number): Promise<void> {
 	const {fd} = await getFileCache(file)
-	return fd.truncate(pages * PAGE_SIZE)
+	await fd.truncate(pages * PAGE_SIZE)
 }
 export async function removeFile(file: string): Promise<void> {
 	const promises = [fs.unlink(file)]
@@ -113,9 +116,10 @@ export async function setFileSegment(
 	await Promise.all(pagePromises)
 }
 export async function setFile(file: string, contents: Uint8Array): Promise<void> {
-	await getFileCache(file, true)
-	await setPageCount(file, pagesToFit(contents.length))
-	await setFileSegment(file, contents, 0, contents.length)
+	await getFileCache(file, true) // create file if it doesn't exist
+	const {length} = contents
+	await setPageCount(file, pagesToFit(length))
+	await setFileSegment(file, contents, 0, length)
 }
 export async function copyWithinFile(
 	file: string, source: number, length: number, target: number
@@ -127,9 +131,11 @@ export async function copyWithinFile(
 	}
 	const pagePromises: Promise<void>[] = []
 	for (let offset = 0, nextOffset: number; offset < length; offset = nextOffset) {
+		// Copy to one target page at a time
 		const targetOffset = target + offset
 		const pageOffset = getPageOffset(targetOffset)
 		const copyLength = Math.min(PAGE_SIZE - pageOffset, length - offset)
+		// Writes a sequence of buffers to targetOffset
 		const writeBuffers = (buffers: Uint8Array[]) =>
 			new FilePage(file, getPageNo(targetOffset)).use(async page => {
 				const pageArray = new Uint8Array(page)
@@ -139,6 +145,7 @@ export async function copyWithinFile(
 					offset += buffer.length
 				}
 			})
+		// Obtain the source data and write it to the target location
 		const sourceOffset = source + offset
 		const sourcePage = getPageNo(sourceOffset)
 		pagePromises.push(new FilePage(file, sourcePage).use(async page => {
@@ -146,6 +153,7 @@ export async function copyWithinFile(
 			const buffer = new Uint8Array(page, pageOffset).subarray(0, copyLength)
 			const remainingLength = copyLength - buffer.length
 			return remainingLength
+				// Need data on part of the following page
 				? new FilePage(file, sourcePage + 1).use(async page =>
 						writeBuffers([buffer, new Uint8Array(page, 0, remainingLength)])
 					)
@@ -160,7 +168,7 @@ export async function shutdown(): Promise<void> {
 	const closePromises: Promise<void>[] = []
 	for (const file in cache) {
 		const {pages, fd} = await cache[file]!
-		pages.clear()
+		pages.clear() // allow mmap()ed buffers to be garbage-collected and unmapped
 		closePromises.push(fd.close())
 	}
 	await Promise.all(closePromises)

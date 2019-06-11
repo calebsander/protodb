@@ -5,7 +5,7 @@ import {getFile, removeFile, setFile} from '../cache'
 import {CollectionType} from '../pb/interface'
 import {itemType} from '../pb/item'
 
-const filename = (name: string) => path.join(dataDir, `${name}.item`)
+const filename = (name: string): string => path.join(dataDir, `${name}.item`)
 
 async function checkIsItem(name: string): Promise<void> {
 	const collections = await getCollections
@@ -15,9 +15,8 @@ async function checkIsItem(name: string): Promise<void> {
 	}
 }
 
-export function create(name: string): Promise<void> {
-	return addCollection(name, CollectionType.ITEM)
-}
+export const create = (name: string): Promise<void> =>
+	addCollection(name, CollectionType.ITEM)
 
 export async function drop(name: string): Promise<void> {
 	await checkIsItem(name)

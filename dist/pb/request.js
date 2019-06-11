@@ -2,8 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const path = require("path");
 const protobuf = require("protobufjs");
-const protoFile = protobuf.loadSync(['request.proto', 'db.proto', 'sorted.proto']
-    .map(file => path.join(__dirname, file)));
+const protoFile = protobuf.loadSync(['interface.proto', 'request.proto'].map(file => path.join(__dirname, file)));
 exports.commandType = protoFile.lookupType('Command');
 exports.bytesResponseType = protoFile.lookupType('BytesResponse');
 exports.iterResponseType = protoFile.lookupType('IterResponse');

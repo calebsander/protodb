@@ -1,4 +1,5 @@
 "use strict";
+// Type declarations for messages common to database files and the TCP protocol
 Object.defineProperty(exports, "__esModule", { value: true });
 var CollectionType;
 (function (CollectionType) {

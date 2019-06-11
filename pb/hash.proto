@@ -15,12 +15,7 @@ message BucketIndex {
 	fixed32 page = 1;
 }
 
-message BucketItem {
-	bytes key = 1;
-	bytes value = 2;
-}
-
 message Bucket {
 	uint32 depth = 1;
-	repeated BucketItem items = 2;
+	repeated KeyValuePair items = 2;
 }

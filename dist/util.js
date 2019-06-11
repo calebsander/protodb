@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const protobufjs_1 = require("protobufjs");
 const cache_1 = require("./cache");
+// Finds the index of the value in an array that minimizes an objective function
 function argmin(arr, keyFunc) {
     let minIndex;
     let minValue = Infinity;
@@ -18,6 +19,7 @@ function argmin(arr, keyFunc) {
     return minIndex;
 }
 exports.argmin = argmin;
+// Concatenates an array of Uint8Arrays
 function concat(buffers) {
     const totalLength = buffers.reduce((totalLength, { length }) => totalLength + length, 0);
     const result = new Uint8Array(totalLength);
@@ -29,6 +31,7 @@ function concat(buffers) {
     return result;
 }
 exports.concat = concat;
+// Checks that an error is the result of a write overflowing its page
 function ensureOverflowError(e) {
     // istanbul ignore if
     if (!(e instanceof RangeError && e.message === 'Source is too large')) {
@@ -36,6 +39,8 @@ function ensureOverflowError(e) {
     }
 }
 exports.ensureOverflowError = ensureOverflowError;
+// Gets the size of an object that is serialized with encodeDelimited().
+// Useful for figuring out what portion of a page is occupied.
 exports.getNodeLength = (file, page) => new cache_1.FilePage(file, page).use(async (page) => {
     const reader = new protobufjs_1.Reader(new Uint8Array(page));
     return reader.uint32() + reader.pos;

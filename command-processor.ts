@@ -243,6 +243,7 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 		commandType.decode(data),
 		{longs: Number, defaults: true}
 	)
+	// Dispatch the command to the function that handles that type
 	let writer: Writer
 	if ('list' in command) {
 		writer = listResponseType.encode(await runList())
@@ -362,9 +363,13 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	return writer.finish()
 }
 
+// This ensures that commands do not execute simultaneously.
+// This promise resolves when the last "queued" command terminates,
+// so we can "enqueue" commands by calling .then() on this promise.
 let runningCommand = Promise.resolve()
 export function executeCommand(data: Uint8Array): Promise<Uint8Array> {
 	const result = runningCommand.then(_ => runCommand(data))
+	// Suppress the response; we just care that the command was processed
 	runningCommand = result.then(_ => {})
 	return result
 }

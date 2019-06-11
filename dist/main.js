@@ -6,7 +6,6 @@ const net = require("net");
 const args_1 = require("./args");
 const cache_1 = require("./cache");
 const command_processor_1 = require("./command-processor");
-const util_1 = require("./util");
 const initDB = () => fs_1.promises.mkdir(args_1.dataDir).catch(_ => { }); // not a problem if it already exists
 async function cleanup() {
     try {
@@ -32,7 +31,7 @@ async function cleanup() {
         const chunks = [];
         connection
             .on('data', chunk => chunks.push(chunk))
-            .on('end', async () => connection.end(await command_processor_1.executeCommand(util_1.concat(chunks))));
+            .on('end', async () => connection.end(await command_processor_1.executeCommand(Buffer.concat(chunks))));
     }).listen(args_1.port);
     console.log(`Listening on port ${args_1.port}`);
 })();

@@ -1,3 +1,5 @@
+// Type declarations for messages common to database files and the TCP protocol
+
 export enum CollectionType {
 	ITEM,
 	HASH,
