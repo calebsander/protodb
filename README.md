@@ -108,7 +108,7 @@ Detailed documentation for these commands can be found in the [client interface 
 
 ## Running the database
 
-Both the datbase server and the client interface are included in the [npm package](https://www.npmjs.com/package/proto-database).
+Both the database server and the client interface are included in the [npm package](https://www.npmjs.com/package/proto-database).
 You can install it with `npm install proto-database`.
 To run the database, simply execute `protodb` from an npm script, or run `node_modules/.bin/protodb` in a terminal.
 To gracefully shut down the database, send it a `SIGINT`, e.g. press CTRL+c in the terminal.
