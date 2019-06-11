@@ -1,6 +1,6 @@
 {
 	"name": "proto-database",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "A structured byte-buffer database",
 	"main": "dist/client/index.js",
 	"typings": "dist/client",
@@ -22,6 +22,7 @@
 		"dist/pb/*.proto",
 		"dist/client/index.d.ts",
 		"dist/pb/interface.d.ts",
+		"icon.svg",
 		"mmap-wrapper/mmap.c"
 	],
 	"author": "Caleb Sander",
