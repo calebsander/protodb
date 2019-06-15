@@ -1,3 +1,4 @@
+import {randomBytes} from 'crypto'
 import {promises as fs} from 'fs'
 import {TestInterface} from 'ava'
 import {TestContext} from '../common'
@@ -119,7 +120,7 @@ export default (test: TestInterface<TestContext>) => {
 		await t.context.client.sortedCreate(name)
 		const getValue = (i: number) => new Uint8Array(50).fill(i)
 		const items = new Array(1e3).fill(0).map((_, i) =>
-			({key: toFloat(Math.random()), value: getValue(i)})
+			({key: toFloat(randomBytes(4).readInt32LE(0)), value: getValue(i)})
 		)
 		await Promise.all(items.map(({key, value}) =>
 			t.context.client.sortedInsert(name, [{float: key}], value)
