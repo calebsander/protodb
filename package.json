@@ -1,6 +1,6 @@
 {
 	"name": "proto-database",
-	"version": "1.0.1",
+	"version": "2.0.0",
 	"description": "A structured byte-buffer database",
 	"main": "dist/client/index.js",
 	"typings": "dist/client",
