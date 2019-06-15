@@ -42,6 +42,7 @@ import {
 	sortedPairListResponseType,
 	voidResponseType
 } from './pb/request'
+import {Queue} from './queue'
 
 function makeErrorResponse(err: Error): ErrorResponse {
 	console.error(err)
@@ -363,13 +364,34 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	return writer.finish()
 }
 
-// This ensures that commands do not execute simultaneously.
-// This promise resolves when the last "queued" command terminates,
-// so we can "enqueue" commands by calling .then() on this promise.
-let runningCommand = Promise.resolve()
-export function executeCommand(data: Uint8Array): Promise<Uint8Array> {
-	const result = runningCommand.then(_ => runCommand(data))
-	// Suppress the response; we just care that the command was processed
-	runningCommand = result.then(_ => {})
-	return result
+interface QueuedCommand {
+	command: Uint8Array
+	resolve(result: Uint8Array): void
+	reject(err: Error): void
 }
+
+let processing = false
+const commandQueue = new Queue<QueuedCommand>()
+
+function executeCommand({command, resolve, reject}: QueuedCommand): void {
+	runCommand(command)
+		.then(result => {
+			resolve(result)
+			try {
+				executeCommand(commandQueue.dequeue())
+			}
+			catch {
+				processing = false
+			}
+		})
+		.catch(reject)
+}
+export const processCommand = (command: Uint8Array): Promise<Uint8Array> =>
+	new Promise((resolve, reject) => {
+		const queuedCommand = {command, resolve, reject}
+		if (processing) commandQueue.enqueue(queuedCommand)
+		else {
+			processing = true
+			executeCommand(queuedCommand)
+		}
+	})

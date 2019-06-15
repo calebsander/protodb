@@ -1,10 +1,16 @@
 import {TestInterface} from 'ava'
 import {TestContext} from '../common'
 import {ProtoDBError} from '../../client'
-import {concat} from '../../util'
 
 const randomBytes = (n: number) =>
 	new Uint8Array(n).map(_ => Math.random() * 256)
+function repeat(bytes: Uint8Array, n: number) {
+	const result = new Uint8Array(bytes.length * n)
+	for (let i = 0; i < result.length; i += bytes.length) {
+		result.set(bytes, i)
+	}
+	return result
+}
 
 export default (test: TestInterface<TestContext>) => {
 	test('hash-small', async t => {
@@ -36,8 +42,7 @@ export default (test: TestInterface<TestContext>) => {
 
 		const getKey = (i: number) =>
 			new Uint8Array([...String(i)].map(Number))
-		const getValue = (key: Uint8Array) =>
-			concat(new Array<Uint8Array>(50).fill(key))
+		const getValue = (key: Uint8Array) => repeat(key, 50)
 		for (let i = 0; i < 5e3; i++) {
 			const key = getKey(i)
 			await t.context.client.hashSet(name, key, getValue(key))
@@ -105,7 +110,7 @@ export default (test: TestInterface<TestContext>) => {
 		await t.context.client.hashCreate(name)
 
 		const getValue = (key: number) =>
-			concat([Buffer.from('a'.repeat(50)), new Uint8Array([key])])
+			new Uint8Array([...new Array(50).fill(1), key])
 		const values = new Map<number, Uint8Array>()
 		for (let key = 0; key < 100; key++) {
 			const value = getValue(key)

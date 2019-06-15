@@ -4,7 +4,8 @@ import {promises as fs} from 'fs'
 import net = require('net')
 import {dataDir, port} from './args'
 import {shutdown} from './cache'
-import {executeCommand} from './command-processor'
+import {processCommand} from './command-processor'
+import {DelimitedReader, DelimitedWriter} from './delimited-stream'
 
 const initDB = (): Promise<void> =>
 	fs.mkdir(dataDir).catch(_ => {}) // not a problem if it already exists
@@ -29,12 +30,12 @@ async function cleanup(): Promise<void> {
 		})
 		.on('SIGTERM', cleanup)
 		.on('SIGINT', cleanup)
-	net.createServer({allowHalfOpen: true}, connection => {
-		const chunks: Buffer[] = []
-		connection
-			.on('data', chunk => chunks.push(chunk))
-			.on('end', async () =>
-				connection.end(await executeCommand(Buffer.concat(chunks)))
+	net.createServer(connection => {
+		const responseStream = new DelimitedWriter
+		responseStream.pipe(connection)
+		connection.pipe(new DelimitedReader)
+			.on('data', async (command: Buffer) =>
+				responseStream.write(await processCommand(command))
 			)
 	}).listen(port)
 	console.log(`Listening on port ${port}`)

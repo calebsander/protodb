@@ -14,7 +14,7 @@ export class TestContext {
 
 	private readonly index = TestContext.testIndex++
 	private db = this.newDB
-	public readonly client = new ProtoDBClient(this.port)
+	private cachedClient?: ProtoDBClient
 
 	private get port() {
 		return DEFAULT_PORT + this.index
@@ -37,13 +37,23 @@ export class TestContext {
 				.on('error', reject)
 		})
 	}
+	get client() {
+		return this.cachedClient || (this.cachedClient = new ProtoDBClient(this.port))
+	}
 
 	async close(): Promise<void> {
+		if (this.cachedClient) {
+			await this.cachedClient.close()
+		}
 		this.db.kill()
 		await this.closed
 		await execPromise(`rm -rf ${this.dataDir}`)
 	}
 	async restart(): Promise<void> {
+		if (this.cachedClient) {
+			await this.cachedClient.close()
+			this.cachedClient = undefined
+		}
 		this.db.kill()
 		await this.closed
 		this.db = this.newDB

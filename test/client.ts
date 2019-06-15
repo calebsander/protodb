@@ -1,29 +1,8 @@
-import net = require('net')
 import readline = require('readline')
-import {inspect} from 'util'
 import protobuf = require('protobufjs')
 import yargs = require('yargs')
+import {ProtoDBClient} from '../client'
 import {DEFAULT_PORT} from '../constants'
-import {Type} from '../pb/common'
-import {
-	Command,
-	commandType,
-	IterResponse,
-	OptionalBytesResponse,
-	OptionalPairResponse,
-	OptionalSortedPairResponse,
-	SortedPairListResponse,
-	bytesResponseType,
-	iterResponseType,
-	listResponseType,
-	optionalBytesResponseType,
-	optionalPairResponseType,
-	optionalSortedPairResponse,
-	sizeResponseType,
-	sortedPairListResponseType,
-	voidResponseType
-} from '../pb/request'
-import {concat} from '../util'
 
 const {port} = yargs.options({
 	port: {
@@ -43,41 +22,40 @@ function fromHexString(str: string): Uint8Array {
 	return bytes
 }
 
-async function lookupType(file: string, ...types: string[]): Promise<Type<any>[]> {
+type Types<T> = {
+	[k in keyof T]: protobuf.Type
+}
+
+async function lookupType<T extends string[]>(file: string, ...types: T): Promise<Types<T>> {
 	const protoFile = await protobuf.load(file)
-	return types.map(type => protoFile.lookupType(type) as Type<any>)
+	return types.map(type => protoFile.lookupType(type)) as Types<T>
 }
 
 async function processCommands() {
+	const client = new ProtoDBClient(port)
 	const rl = readline.createInterface(process.stdin)
 	for await (const line of rl) {
 		const trimmedLine = line.trim()
 		if (!trimmedLine) continue
 
 		const args = trimmedLine.split(/\s+/)
-		let command: Command
-		let responseType: Type<any>
-		let bytesType: Type<any>, keyType: Type<any>, valueType: Type<any>
 		try {
 			const [type] = args
 			switch (type) {
 				case 'list':
-					command = {[type]: {}}
-					responseType = listResponseType
+					console.log(await client.list())
 					break
 				// Name-only commands
-				case 'itemCreate':
-				case 'itemDrop':
-				case 'hashCreate':
-				case 'hashDrop':
-				case 'listCreate':
-				case 'listDrop':
-				case 'sortedCreate':
-				case 'sortedDrop': {
+				case 'itemCreate': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}} as Command
-					responseType = voidResponseType
+					await client.itemCreate(name)
+					break
+				}
+				case 'itemDrop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.itemDrop(name)
 					break
 				}
 				case 'itemGet': {
@@ -85,9 +63,9 @@ async function processCommands() {
 					if (!(name && typeFile)) {
 						throw new Error(`Syntax: ${type} name typeFile`)
 					}
-					[bytesType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {name}}
-					responseType = bytesResponseType
+					const [valueType] = await lookupType(typeFile, 'Type')
+					const result = await client.itemGet(name)
+					console.log(valueType.toObject(valueType.decode(result)))
 					break
 				}
 				case 'itemSet': {
@@ -96,11 +74,19 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name typeFile value`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {
-						name,
-						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
-					}}
-					responseType = voidResponseType
+					await client.itemSet(name, valueType.encode(JSON.parse(value)).finish())
+					break
+				}
+				case 'hashCreate': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.hashCreate(name)
+					break
+				}
+				case 'hashDrop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.hashDrop(name)
 					break
 				}
 				case 'hashDelete': {
@@ -109,11 +95,7 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name typeFile key`)
 					}
 					const [keyType] = await lookupType(typeFile, 'KeyType')
-					command = {[type]: {
-						name,
-						key: keyType.encode(keyType.fromObject(JSON.parse(key))).finish()
-					}}
-					responseType = voidResponseType
+					await client.hashDelete(name, keyType.encode(JSON.parse(key)).finish())
 					break
 				}
 				case 'hashGet': {
@@ -123,12 +105,9 @@ async function processCommands() {
 					}
 					const [keyType, valueType] =
 						await lookupType(typeFile, 'KeyType', 'ValueType')
-					command = {[type]: {
-						name,
-						key: keyType.encode(keyType.fromObject(JSON.parse(key))).finish()
-					}}
-					responseType = optionalBytesResponseType
-					bytesType = valueType
+					const result =
+						await client.hashGet(name, keyType.encode(JSON.parse(key)).finish())
+					console.log(result && valueType.toObject(valueType.decode(result)))
 					break
 				}
 				case 'hashSet': {
@@ -138,37 +117,30 @@ async function processCommands() {
 					}
 					const [keyType, valueType] =
 						await lookupType(typeFile, 'KeyType', 'ValueType')
-					command = {[type]: {
+					await client.hashSet(
 						name,
-						key: keyType.encode(keyType.fromObject(JSON.parse(key))).finish(),
-						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
-					}}
-					responseType = voidResponseType
+						keyType.encode(JSON.parse(key)).finish(),
+						valueType.encode(JSON.parse(value)).finish()
+					)
 					break
 				}
-				case 'hashSize':
-				case 'listSize':
-				case 'sortedSize': {
+				case 'hashSize': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}} as Command
-					responseType = sizeResponseType
+					console.log(await client.hashSize(name))
 					break
 				}
 				case 'hashIter': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					command = {[type]: {name}}
-					responseType = iterResponseType
+					const iter = await client.hashIter(name)
+					console.log(toHexString(iter))
 					break
 				}
-				case 'hashIterBreak':
-				case 'listIterBreak':
-				case 'sortedIterBreak': {
+				case 'hashIterBreak': {
 					const iter: string | undefined = args[1]
 					if (!iter) throw new Error(`Syntax: ${type} iter`)
-					command = {[type]: {iter: fromHexString(iter)}} as Command
-					responseType = voidResponseType
+					await client.hashIterBreak(fromHexString(iter))
 					break
 				}
 				case 'hashIterNext': {
@@ -176,16 +148,31 @@ async function processCommands() {
 					if (!(iter && typeFile)) {
 						throw new Error(`Syntax: ${type} iter typeFile`)
 					}
-					[keyType, valueType] = await lookupType(typeFile, 'KeyType', 'ValueType')
-					command = {[type]: {iter: fromHexString(iter)}}
-					responseType = optionalPairResponseType
+					const [keyType, valueType] =
+						await lookupType(typeFile, 'KeyType', 'ValueType')
+					const result = await client.hashIterNext(fromHexString(iter))
+					console.log(result && {
+						key: keyType.toObject(keyType.decode(result.key)),
+						value: valueType.toObject(valueType.decode(result.value))
+					})
+					break
+				}
+				case 'listCreate': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.listCreate(name)
+					break
+				}
+				case 'listDrop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.listDrop(name)
 					break
 				}
 				case 'listDelete': {
 					const [name, index] = args.slice(1) as (string | undefined)[]
 					if (!(name && index)) throw new Error(`Syntax: ${type} name [index]`)
-					command = {[type]: {name, index: Number(index)}}
-					responseType = voidResponseType
+					await client.listDelete(name, Number(index))
 					break
 				}
 				case 'listGet': {
@@ -193,9 +180,9 @@ async function processCommands() {
 					if (!(name && index && typeFile)) {
 						throw new Error(`Syntax: ${type} name index typeFile`)
 					}
-					[bytesType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {name, index: Number(index)}}
-					responseType = bytesResponseType
+					const [valueType] = await lookupType(typeFile, 'Type')
+					const result = await client.listGet(name, Number(index))
+					console.log(valueType.toObject(valueType.decode(result)))
 					break
 				}
 				case 'listInsert': {
@@ -212,12 +199,11 @@ async function processCommands() {
 							throw new Error(`Syntax: ${type} name [index] typeFile value`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {
+					await client.listInsert(
 						name,
-						index: index ? {value: Number(index)} : {none: {}},
-						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
-					}}
-					responseType = voidResponseType
+						valueType.encode(JSON.parse(value)).finish(),
+						index ? Number(index) : undefined
+					)
 					break
 				}
 				case 'listSet': {
@@ -226,23 +212,34 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name index typeFile value`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {
+					await client.listSet(
 						name,
-						index: Number(index),
-						value: valueType.encode(valueType.fromObject(JSON.parse(value))).finish()
-					}}
-					responseType = voidResponseType
+						Number(index),
+						valueType.encode(JSON.parse(value)).finish()
+					)
+					break
+				}
+				case 'listSize': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					console.log(await client.listSize(name))
 					break
 				}
 				case 'listIter': {
 					const [name, start, end] = args.slice(1) as (string | undefined)[]
 					if (!name) throw new Error(`Syntax: ${type} name [start [end]]`)
-					command = {[type]: {
+					const iter = await client.listIter(
 						name,
-						start: start ? {value: Number(start)} : {none: {}},
-						end: end ? {value: Number(end)} : {none: {}}
-					}}
-					responseType = iterResponseType
+						start ? Number(start) : undefined,
+						end ? Number(end) : undefined
+					)
+					console.log(toHexString(iter))
+					break
+				}
+				case 'listIterBreak': {
+					const iter: string | undefined = args[1]
+					if (!iter) throw new Error(`Syntax: ${type} iter`)
+					await client.listIterBreak(fromHexString(iter))
 					break
 				}
 				case 'listIterNext': {
@@ -250,9 +247,21 @@ async function processCommands() {
 					if (!(iter && typeFile)) {
 						throw new Error(`Syntax: ${type} iter typeFile`)
 					}
-					[bytesType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {iter: fromHexString(iter)}}
-					responseType = optionalBytesResponseType
+					const [valueType] = await lookupType(typeFile, 'Type')
+					const result = await client.listIterNext(fromHexString(iter))
+					console.log(result && valueType.toObject(valueType.decode(result)))
+					break
+				}
+				case 'sortedCreate': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.sortedCreate(name)
+					break
+				}
+				case 'sortedDrop': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					await client.sortedDrop(name)
 					break
 				}
 				case 'sortedDelete': {
@@ -260,8 +269,7 @@ async function processCommands() {
 					if (!(name && key)) {
 						throw new Error(`Syntax: ${type} name key`)
 					}
-					command = {[type]: {name, key: JSON.parse(key)}}
-					responseType = voidResponseType
+					await client.sortedDelete(name, JSON.parse(key))
 					break
 				}
 				case 'sortedGet': {
@@ -269,9 +277,12 @@ async function processCommands() {
 					if (!(name && key && typeFile)) {
 						throw new Error(`Syntax: ${type} name key typeFile`)
 					}
-					[bytesType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {name, key: JSON.parse(key)}}
-					responseType = sortedPairListResponseType
+					const [valueType] = await lookupType(typeFile, 'Type')
+					const result = await client.sortedGet(name, JSON.parse(key))
+					console.log(result.map(({key, value}) => ({
+						key,
+						value: valueType.toObject(valueType.decode(value))
+					})))
 					break
 				}
 				case 'sortedInsert': {
@@ -280,24 +291,35 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name key typeFile value`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {
+					await client.sortedInsert(
 						name,
-						key: JSON.parse(key),
-						value: valueType.encode(JSON.parse(value)).finish()
-					}}
-					responseType = voidResponseType
+						JSON.parse(key),
+						valueType.encode(JSON.parse(value)).finish()
+					)
+					break
+				}
+				case 'sortedSize': {
+					const name: string | undefined = args[1]
+					if (!name) throw new Error(`Syntax: ${type} name`)
+					console.log(await client.sortedSize(name))
 					break
 				}
 				case 'sortedIter': {
 					const [name, start, end, inclusive] = args.slice(1) as (string | undefined)[]
 					if (!name) throw new Error(`Syntax: ${type} name [start [end ["in"]]]`)
-					command = {[type]: {
+					const iter = await client.sortedIter(
 						name,
-						start: start ? {value: {elements: JSON.parse(start)}} : {none: {}},
-						end: end ? {value: {elements: JSON.parse(end)}} : {none: {}},
-						inclusive: !!inclusive
-					}}
-					responseType = iterResponseType
+						start ? JSON.parse(start) : undefined,
+						end ? JSON.parse(end) : undefined,
+						!!inclusive
+					)
+					console.log(toHexString(iter))
+					break
+				}
+				case 'sortedIterBreak': {
+					const iter: string | undefined = args[1]
+					if (!iter) throw new Error(`Syntax: ${type} iter`)
+					await client.sortedIterBreak(fromHexString(iter))
 					break
 				}
 				case 'sortedIterNext': {
@@ -305,9 +327,12 @@ async function processCommands() {
 					if (!(iter && typeFile)) {
 						throw new Error(`Syntax: ${type} iter typeFile`)
 					}
-					[bytesType] = await lookupType(typeFile, 'Type')
-					command = {[type]: {iter: fromHexString(iter)}}
-					responseType = optionalSortedPairResponse
+					const [valueType] = await lookupType(typeFile, 'Type')
+					const result = await client.sortedIterNext(fromHexString(iter))
+					console.log(result && {
+						key: result.key,
+						value: valueType.toObject(valueType.decode(result.value))
+					})
 					break
 				}
 				default:
@@ -316,71 +341,9 @@ async function processCommands() {
 		}
 		catch (e) {
 			console.error(e)
-			continue
 		}
-
-		const client: net.Socket = net.connect(port, undefined, () =>
-			client.end(commandType.encode(command).finish())
-		)
-		const response = await new Promise((resolve, reject) => {
-			const responseChunks: Buffer[] = []
-			client
-				.on('data', chunk => responseChunks.push(chunk))
-				.on('end', () => {
-					let response = responseType.toObject(
-						responseType.decode(concat(responseChunks)),
-						{defaults: true, enums: String, longs: Number}
-					)
-					switch (responseType) {
-						case bytesResponseType:
-						case optionalBytesResponseType:
-							const bytesResponse: OptionalBytesResponse = response
-							if (!('none' in bytesResponse) && 'data' in bytesResponse) {
-								response = bytesType.toObject(
-									bytesType.decode(bytesResponse.data)
-								)
-							}
-							break
-						case sortedPairListResponseType:
-							const valuesResponse: SortedPairListResponse = response
-							if ('pairs' in valuesResponse) {
-								response = valuesResponse.pairs.pairs.map(({key, value}) =>
-									({key, value: bytesType.toObject(bytesType.decode(value))})
-								)
-							}
-							break
-						case iterResponseType:
-							const iterResponse: IterResponse = response
-							if ('iter' in iterResponse) {
-								response = toHexString(iterResponse.iter)
-							}
-							break
-						case optionalPairResponseType:
-							const pairResponse: OptionalPairResponse = response
-							if ('pair' in pairResponse && pairResponse.pair) {
-								const {key, value} = pairResponse.pair
-								response = {
-									key: keyType.toObject(keyType.decode(key)),
-									value: valueType.toObject(valueType.decode(value))
-								}
-							}
-							break
-						case optionalSortedPairResponse:
-							const sortedPairResponse: OptionalSortedPairResponse = response
-							if ('pair' in sortedPairResponse && sortedPairResponse.pair) {
-								const {key, value} = sortedPairResponse.pair
-								response = {
-									key,
-									value: bytesType.toObject(bytesType.decode(value))
-								}
-							}
-					}
-					resolve(response)
-				})
-				.on('error', reject)
-		})
-		console.log(inspect(response, {depth: Infinity, colors: true}))
 	}
+	await client.close()
 }
 
 processCommands()

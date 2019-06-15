@@ -1,5 +1,7 @@
 import net = require('net')
+import {Writable} from 'stream'
 import {DEFAULT_PORT} from '../constants'
+import {DelimitedReader, DelimitedWriter} from '../delimited-stream'
 import {Type} from '../pb/common'
 import {DB, KeyElement, KeyValuePair, SortedKeyValuePair} from '../pb/interface'
 import {
@@ -16,7 +18,7 @@ import {
 	sortedPairListResponseType,
 	voidResponseType
 } from '../pb/request'
-import {concat} from '../util'
+import {Queue} from '../queue'
 
 const toUint8Array = (buffer: ArrayBuffer | Uint8Array) =>
 	buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
@@ -26,6 +28,8 @@ const toOptionalKey = (key?: KeyElement[]) =>
 	key ? {value: {elements: key}} : {none: {}}
 const toOptionalBytes = (value: {data: Uint8Array} | {none: {}}) =>
 	'data' in value ? value.data : null
+const bufferToUint8Array = ({buffer, byteOffset, byteLength}: Buffer) =>
+	new Uint8Array(buffer, byteOffset, byteLength)
 
 /** An error indicating that the `protoDB` server failed to run a command */
 export class ProtoDBError extends Error {
@@ -34,33 +38,45 @@ export class ProtoDBError extends Error {
 	}
 }
 
+type ResponseCallback = (data: Uint8Array) => void
+
 /**
  * A `protoDB` client that can be used from JavaScript/TypeScript.
  * Each method serializes a type of command and sends it over TCP to the server.
  * The returned `Promise` resolves to the server's response.
  */
 export class ProtoDBClient {
+	private readonly responseQueue = new Queue<ResponseCallback>()
+	private readonly socket: net.Socket
+	private readonly connected: Promise<void>
+	private readonly requestStream: Writable
+
 	/**
 	 * @param port the TCP port to issues commands to (default `9000`)
 	 * @param host the hostname to connect to (default `localhost`)
 	 */
-	constructor(
-		public readonly port = DEFAULT_PORT,
-		public readonly host = 'localhost'
-	) {}
+	constructor(port = DEFAULT_PORT, host = 'localhost') {
+		this.socket = net.connect(port, host)
+		this.connected = new Promise((resolve, reject) =>
+			this.socket
+				.on('connect', resolve)
+				.on('error', reject)
+		)
+		this.requestStream = new DelimitedWriter
+		this.requestStream.pipe(this.socket)
+		this.socket.pipe(new DelimitedReader)
+			.on('data', (response: Buffer) =>
+				this.responseQueue.dequeue()(bufferToUint8Array(response))
+			)
+	}
 
 	private async runCommand<T extends object>(
 		command: Command, responseType: Type<T | ErrorResponse>
 	): Promise<T> {
-		const client: net.Socket = net.connect(this.port, this.host, () =>
-			client.end(commandType.encode(command).finish())
-		)
-		const data = await new Promise<Uint8Array>((resolve, reject) => {
-			const chunks: Buffer[] = []
-			client
-				.on('data', chunk => chunks.push(chunk))
-				.on('end', () => resolve(concat(chunks)))
-				.on('error', reject)
+		await this.connected
+		const data = await new Promise<Uint8Array>(resolve => {
+			this.requestStream.write(commandType.encode(command).finish())
+			this.responseQueue.enqueue(resolve)
 		})
 		const response = responseType.toObject(
 			responseType.decode(data),
@@ -68,6 +84,11 @@ export class ProtoDBClient {
 		)
 		if ('error' in response) throw new ProtoDBError(response.error)
 		return response
+	}
+
+	async close(): Promise<void> {
+		await this.connected
+		await new Promise(resolve => this.socket.end(resolve))
 	}
 
 	/**
