@@ -30,7 +30,6 @@ class ProtoDBClient {
     constructor(port = constants_1.DEFAULT_PORT, host = 'localhost') {
         this.responseQueue = new queue_1.Queue();
         this.socket = net.connect(port, host);
-        this.socket.setNoDelay(); // disable TCP buffering for faster commands
         this.connected = new Promise((resolve, reject) => this.socket
             .on('connect', resolve)
             .on('error', reject));

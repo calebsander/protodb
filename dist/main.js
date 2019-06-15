@@ -29,7 +29,6 @@ async function cleanup() {
         .on('SIGTERM', cleanup)
         .on('SIGINT', cleanup);
     net.createServer(connection => {
-        connection.setNoDelay(); // disable TCP buffering for faster commands
         const responseStream = new delimited_stream_1.DelimitedWriter;
         responseStream.pipe(connection);
         connection.pipe(new delimited_stream_1.DelimitedReader)
