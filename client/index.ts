@@ -86,6 +86,11 @@ export class ProtoDBClient {
 		return response
 	}
 
+	/**
+	 * Closes the TCP connection to the server.
+	 *
+	 * @return a promise that resolves when the socket is closed
+	 */
 	async close(): Promise<void> {
 		await this.connected
 		await new Promise(resolve => this.socket.end(resolve))

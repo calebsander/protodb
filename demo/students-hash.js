@@ -43,6 +43,8 @@ async function main() {
 	// ValueType { firstName: 'Belac', lastName: 'Rednas', year: 3005 }
 	console.log(await client.hashGet('students', keyType.encode({id: 10451}).finish()))
 	// null
+
+	await client.close()
 }
 
 main()

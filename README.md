@@ -38,6 +38,7 @@ async function main() {
 
   const client = new ProtoDBClient
   await client.hashCreate('users')
+
   const key = KeyType.encode({userId: 1234}).finish()
   const value = ValueType.encode({
     firstName: 'Qwerty',
@@ -45,8 +46,11 @@ async function main() {
     age: 30
   }).finish()
   await client.hashSet('users', key, value)
+
   const retrieved = await client.hashGet('users', key)
   console.log(ValueType.decode(retrieved))
+
+  await client.close()
 }
 
 main()
@@ -127,6 +131,8 @@ The `ProtoDBClient` object has a method corresponding to each `protoDB` command:
 ```ts
 class ProtoDBClient {
   constructor(port?: number, host?: string)
+
+  close(): Promise<void>
 
   list(): Promise<DB>
 

@@ -14,9 +14,25 @@ const cardType = protobuf.parse(`
 		SPADES = 3;
 	}
 
+	enum Number {
+		ACE = 1;
+		TWO = 2;
+		THREE = 3;
+		FOUR = 4;
+		FIVE = 5;
+		SIX = 6;
+		SEVEN = 7;
+		EIGHT = 8;
+		NINE = 9;
+		TEN = 10;
+		JACK = 11;
+		QUEEN = 12;
+		KING = 13;
+	}
+
 	message Card {
 		Suit suit = 1;
-		uint32 number = 2;
+		Number number = 2;
 	}
 `).root.lookupType('Card')
 
@@ -37,11 +53,13 @@ async function main() {
 		await client.listDelete('deck', index)
 	}
 	/*
-	{ suit: 'SPADES', number: 2 }
-	{ suit: 'HEARTS', number: 2 }
-	{ suit: 'DIAMONDS', number: 4 }
+	{ suit: 'SPADES', number: 'SEVEN' }
+	{ suit: 'CLUBS', number: 'SIX' }
+	{ suit: 'HEARTS', number: 'SIX' }
 	...
 	*/
+
+	await client.close()
 }
 
 main()

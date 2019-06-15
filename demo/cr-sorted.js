@@ -39,7 +39,7 @@ async function main() {
 		// Find all trips and their stops
 		const {data: stops, included: trips} =
 			await queryAPI(`schedules?filter[route]=${id}&include=trip`)
-		for (const {relationships, attributes} of stops) {
+		await Promise.all(stops.map(({relationships, attributes}) => {
 			const stopName = relationships.stop.data.id
 			// Order stops by station and time
 			const key = [
@@ -49,10 +49,10 @@ async function main() {
 			const tripId = relationships.trip.data.id
 			const trip = trips.find(trip => trip.id === tripId).attributes
 			const value = {trip: Number(trip.name), destination: trip.headsign}
-			if (value.destination === stopName) continue // skip if this is the last stop
-
-			await client.sortedInsert('stops', key, stopType.encode(value).finish())
-		}
+			if (value.destination !== stopName) { // skip if this is the last stop
+				client.sortedInsert('stops', key, stopType.encode(value).finish())
+			}
+		}))
 	}))
 
 	// List all departures from the query stop, ordered by time
@@ -70,6 +70,8 @@ async function main() {
 	5:30:00 AM { trip: 583, destination: 'Framingham' }
 	...
 	*/
+
+	await client.close()
 }
 
 main()

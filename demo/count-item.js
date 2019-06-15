@@ -25,6 +25,8 @@ async function main() {
 	for (let i = 0; i < 1000; i++) await increment()
 	console.log(countType.decode(await client.itemGet('count')))
 	// Count { value: 1000 }
+
+	await client.close()
 }
 
 main()
