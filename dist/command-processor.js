@@ -14,6 +14,7 @@ const item = __importStar(require("./collections/item"));
 const list = __importStar(require("./collections/list"));
 const sorted = __importStar(require("./collections/sorted"));
 const request_1 = require("./pb/request");
+const queue_1 = require("./queue");
 function makeErrorResponse(err) {
     console.error(err);
     const { name, message } = err;
@@ -257,14 +258,29 @@ async function runCommand(data) {
     }
     return writer.finish();
 }
-// This ensures that commands do not execute simultaneously.
-// This promise resolves when the last "queued" command terminates,
-// so we can "enqueue" commands by calling .then() on this promise.
-let runningCommand = Promise.resolve();
-function executeCommand(data) {
-    const result = runningCommand.then(_ => runCommand(data));
-    // Suppress the response; we just care that the command was processed
-    runningCommand = result.then(_ => { });
-    return result;
+let processing = false;
+const commandQueue = new queue_1.Queue();
+function executeCommand({ command, callback }) {
+    runCommand(command).then(response => {
+        callback(response);
+        let nextCommand;
+        try {
+            nextCommand = commandQueue.dequeue();
+        }
+        catch (_a) { }
+        if (nextCommand)
+            executeCommand(nextCommand);
+        else
+            processing = false;
+    });
 }
-exports.executeCommand = executeCommand;
+function processCommand(command, callback) {
+    const queuedCommand = { command, callback };
+    if (processing)
+        commandQueue.enqueue(queuedCommand);
+    else {
+        processing = true;
+        executeCommand(queuedCommand);
+    }
+}
+exports.processCommand = processCommand;

@@ -2,12 +2,14 @@ const DEFAULT_INITIAL_SIZE = 16
 
 export class Queue<T> {
 	private buffer: T[]
-	private head: number
-	private tail: number
+	private head = 0
+	private tail = 0
 
 	constructor(initialSize = DEFAULT_INITIAL_SIZE) {
+		// istanbul ignore if
+		if (initialSize <= 0) throw new Error('Initial size must be positive')
+
 		this.buffer = new Array(initialSize)
-		this.head = this.tail = 0
 	}
 
 	enqueue(elem: T): void {

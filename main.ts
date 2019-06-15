@@ -31,11 +31,12 @@ async function cleanup(): Promise<void> {
 		.on('SIGTERM', cleanup)
 		.on('SIGINT', cleanup)
 	net.createServer(connection => {
+		connection.setNoDelay() // disable TCP buffering for faster commands
 		const responseStream = new DelimitedWriter
 		responseStream.pipe(connection)
 		connection.pipe(new DelimitedReader)
-			.on('data', async (command: Buffer) =>
-				responseStream.write(await processCommand(command))
+			.on('data', (command: Buffer) =>
+				processCommand(command, response => responseStream.write(response))
 			)
 	}).listen(port)
 	console.log(`Listening on port ${port}`)

@@ -19,18 +19,6 @@ function argmin(arr, keyFunc) {
     return minIndex;
 }
 exports.argmin = argmin;
-// Concatenates an array of Uint8Arrays
-function concat(buffers) {
-    const totalLength = buffers.reduce((totalLength, { length }) => totalLength + length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const buffer of buffers) {
-        result.set(buffer, offset);
-        offset += buffer.length;
-    }
-    return result;
-}
-exports.concat = concat;
 // Checks that an error is the result of a write overflowing its page
 function ensureOverflowError(e) {
     // istanbul ignore if

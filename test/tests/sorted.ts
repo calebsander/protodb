@@ -118,18 +118,17 @@ export default (test: TestInterface<TestContext>) => {
 		const name = 'many-s'
 		await t.context.client.sortedCreate(name)
 		const getValue = (i: number) => new Uint8Array(50).fill(i)
-		const items: {key: number, value: Uint8Array}[] = []
-		for (let i = 0; i < 1e3; i++) {
-			const key = toFloat(Math.random())
-			const value = getValue(i)
-			items.push({key, value})
-			await t.context.client.sortedInsert(name, [{float: key}], value)
-		}
-		for (const {key, value} of items) {
+		const items = new Array(1e3).fill(0).map((_, i) =>
+			({key: toFloat(Math.random()), value: getValue(i)})
+		)
+		await Promise.all(items.map(({key, value}) =>
+			t.context.client.sortedInsert(name, [{float: key}], value)
+		))
+		await Promise.all(items.map(async ({key, value}) => {
 			const sortedKey = [{float: key}]
 			const result = await t.context.client.sortedGet(name, sortedKey)
 			t.deepEqual(result, [{key: sortedKey, value}])
-		}
+		}))
 		const result = await t.context.client.sortedGet(name, [])
 		items.sort((a, b) => a.key - b.key)
 		t.deepEqual(

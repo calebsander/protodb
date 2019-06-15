@@ -9,10 +9,4 @@ os:
   - osx
 dist: xenial
 
-# Decrease TCP connection lifetime on Mac OS
-# since tests use > 16K ports in 15 seconds
-before_script: |
-  if [ "$TRAVIS_OS_NAME" == "osx" ]; then
-    sudo sysctl -w net.inet.tcp.msl=100
-  fi
 after_success: npm run coveralls

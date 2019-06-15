@@ -6,6 +6,7 @@ const net = require("net");
 const args_1 = require("./args");
 const cache_1 = require("./cache");
 const command_processor_1 = require("./command-processor");
+const delimited_stream_1 = require("./delimited-stream");
 const initDB = () => fs_1.promises.mkdir(args_1.dataDir).catch(_ => { }); // not a problem if it already exists
 async function cleanup() {
     try {
@@ -27,11 +28,12 @@ async function cleanup() {
     })
         .on('SIGTERM', cleanup)
         .on('SIGINT', cleanup);
-    net.createServer({ allowHalfOpen: true }, connection => {
-        const chunks = [];
-        connection
-            .on('data', chunk => chunks.push(chunk))
-            .on('end', async () => connection.end(await command_processor_1.executeCommand(Buffer.concat(chunks))));
+    net.createServer(connection => {
+        connection.setNoDelay(); // disable TCP buffering for faster commands
+        const responseStream = new delimited_stream_1.DelimitedWriter;
+        responseStream.pipe(connection);
+        connection.pipe(new delimited_stream_1.DelimitedReader)
+            .on('data', (command) => command_processor_1.processCommand(command, response => responseStream.write(response)));
     }).listen(args_1.port);
     console.log(`Listening on port ${args_1.port}`);
 })();

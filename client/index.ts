@@ -38,7 +38,7 @@ export class ProtoDBError extends Error {
 	}
 }
 
-type ResponseCallback = (data: Uint8Array) => void
+type ResponseCallback = (response: Uint8Array) => void
 
 /**
  * A `protoDB` client that can be used from JavaScript/TypeScript.
@@ -57,6 +57,7 @@ export class ProtoDBClient {
 	 */
 	constructor(port = DEFAULT_PORT, host = 'localhost') {
 		this.socket = net.connect(port, host)
+		this.socket.setNoDelay() // disable TCP buffering for faster commands
 		this.connected = new Promise((resolve, reject) =>
 			this.socket
 				.on('connect', resolve)

@@ -364,34 +364,35 @@ async function runCommand(data: Uint8Array): Promise<Uint8Array> {
 	return writer.finish()
 }
 
+export type ResponseCallback = (response: Uint8Array) => void
+
 interface QueuedCommand {
 	command: Uint8Array
-	resolve(result: Uint8Array): void
-	reject(err: Error): void
+	callback: ResponseCallback
 }
 
 let processing = false
 const commandQueue = new Queue<QueuedCommand>()
 
-function executeCommand({command, resolve, reject}: QueuedCommand): void {
-	runCommand(command)
-		.then(result => {
-			resolve(result)
-			try {
-				executeCommand(commandQueue.dequeue())
-			}
-			catch {
-				processing = false
-			}
-		})
-		.catch(reject)
-}
-export const processCommand = (command: Uint8Array): Promise<Uint8Array> =>
-	new Promise((resolve, reject) => {
-		const queuedCommand = {command, resolve, reject}
-		if (processing) commandQueue.enqueue(queuedCommand)
-		else {
-			processing = true
-			executeCommand(queuedCommand)
+function executeCommand({command, callback}: QueuedCommand): void {
+	runCommand(command).then(response => {
+		callback(response)
+		let nextCommand: QueuedCommand | undefined
+		try {
+			nextCommand = commandQueue.dequeue()
 		}
+		catch {}
+		if (nextCommand) executeCommand(nextCommand)
+		else processing = false
 	})
+}
+export function processCommand(
+	command: Uint8Array, callback: ResponseCallback
+): void {
+	const queuedCommand = {command, callback}
+	if (processing) commandQueue.enqueue(queuedCommand)
+	else {
+		processing = true
+		executeCommand(queuedCommand)
+	}
+}

@@ -2,12 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const net = require("net");
 const constants_1 = require("../constants");
+const delimited_stream_1 = require("../delimited-stream");
 const request_1 = require("../pb/request");
-const util_1 = require("../util");
+const queue_1 = require("../queue");
 const toUint8Array = (buffer) => buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 const toOptionalIndex = (index) => index === undefined ? { none: {} } : { value: index };
 const toOptionalKey = (key) => key ? { value: { elements: key } } : { none: {} };
 const toOptionalBytes = (value) => 'data' in value ? value.data : null;
+const bufferToUint8Array = ({ buffer, byteOffset, byteLength }) => new Uint8Array(buffer, byteOffset, byteLength);
 /** An error indicating that the `protoDB` server failed to run a command */
 class ProtoDBError extends Error {
     get name() {
@@ -26,22 +28,31 @@ class ProtoDBClient {
      * @param host the hostname to connect to (default `localhost`)
      */
     constructor(port = constants_1.DEFAULT_PORT, host = 'localhost') {
-        this.port = port;
-        this.host = host;
+        this.responseQueue = new queue_1.Queue();
+        this.socket = net.connect(port, host);
+        this.socket.setNoDelay(); // disable TCP buffering for faster commands
+        this.connected = new Promise((resolve, reject) => this.socket
+            .on('connect', resolve)
+            .on('error', reject));
+        this.requestStream = new delimited_stream_1.DelimitedWriter;
+        this.requestStream.pipe(this.socket);
+        this.socket.pipe(new delimited_stream_1.DelimitedReader)
+            .on('data', (response) => this.responseQueue.dequeue()(bufferToUint8Array(response)));
     }
     async runCommand(command, responseType) {
-        const client = net.connect(this.port, this.host, () => client.end(request_1.commandType.encode(command).finish()));
-        const data = await new Promise((resolve, reject) => {
-            const chunks = [];
-            client
-                .on('data', chunk => chunks.push(chunk))
-                .on('end', () => resolve(util_1.concat(chunks)))
-                .on('error', reject);
+        await this.connected;
+        const data = await new Promise(resolve => {
+            this.requestStream.write(request_1.commandType.encode(command).finish());
+            this.responseQueue.enqueue(resolve);
         });
         const response = responseType.toObject(responseType.decode(data), { defaults: true, longs: Number });
         if ('error' in response)
             throw new ProtoDBError(response.error);
         return response;
+    }
+    async close() {
+        await this.connected;
+        await new Promise(resolve => this.socket.end(resolve));
     }
     /**
      * Lists the name and type of each collection stored by the database.
