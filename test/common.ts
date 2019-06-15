@@ -28,7 +28,7 @@ export class TestContext {
 	private get closed() {
 		return new Promise<void>(resolve => this.db.on('close', resolve))
 	}
-	get ready() {
+	get ready(): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
 			readline.createInterface(this.db.stdout)
 				.on('line', line => {
@@ -37,7 +37,7 @@ export class TestContext {
 				.on('error', reject)
 		})
 	}
-	get client() {
+	get client(): ProtoDBClient {
 		return this.cachedClient || (this.cachedClient = new ProtoDBClient(this.port))
 	}
 

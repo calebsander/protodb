@@ -114,7 +114,7 @@ Detailed documentation for these commands can be found in the [client interface 
 
 Both the database server and the client interface are included in the [npm package](https://www.npmjs.com/package/proto-database).
 You can install it with `npm install proto-database`.
-To run the database, simply execute `protodb` from an npm script, or run `node_modules/.bin/protodb` in a terminal.
+To run the database, simply execute `protodb` from an npm script, or run `$(npm bin)/protodb` in a terminal.
 To gracefully shut down the database, send it a `SIGINT`, e.g. press CTRL+c in the terminal.
 By default, the database will store its files in a `data` folder in the current directory and listen on port 9000.
 You can configure these from the command line (run `protodb --help` for details).
@@ -179,7 +179,7 @@ The `ProtoDBError` constructor is also exported from the npm package.
 The client is written in TypeScript and exports typings so it can be used from a TypeScript project.
 You can use the following import statement in TypeScript:
 ```ts
-import {ProtoDBClient, ProtoDBError} from 'proto-database'
+import {ProtoDBClient, ProtoDBError, CollectionType} from 'proto-database'
 
 const client = new ProtoDBClient
 // ...

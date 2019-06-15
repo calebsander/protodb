@@ -3,7 +3,13 @@ import {Writable} from 'stream'
 import {DEFAULT_PORT} from '../constants'
 import {DelimitedReader, DelimitedWriter} from '../delimited-stream'
 import {Type} from '../pb/common'
-import {DB, KeyElement, KeyValuePair, SortedKeyValuePair} from '../pb/interface'
+import {
+	Collections,
+	CollectionType,
+	KeyElement,
+	KeyValuePair,
+	SortedKeyValuePair
+} from '../pb/interface'
 import {
 	bytesResponseType,
 	Command,
@@ -101,14 +107,14 @@ export class ProtoDBClient {
 	 * Example:
 	 * ```js
 	 * await client.hashCreate('h')
-	 * console.log(await client.list()) // { collections: { h: CollectionType.HASH } }
+	 * console.log(await client.list()) // { h: CollectionType.HASH }
 	 * ```
 	 *
 	 * @return all collections in the database
 	 */
-	async list(): Promise<DB> {
+	async list(): Promise<Collections> {
 		const {db} = await this.runCommand({list: {}}, listResponseType)
-		return db
+		return db.collections
 	}
 
 	/**
@@ -694,3 +700,5 @@ export class ProtoDBClient {
 		return pair || null
 	}
 }
+
+export {CollectionType}

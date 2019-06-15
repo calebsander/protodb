@@ -1,11 +1,13 @@
 import readline = require('readline')
+import {inspect} from 'util'
 import protobuf = require('protobufjs')
 import yargs = require('yargs')
-import {ProtoDBClient} from '../client'
+import {CollectionType, ProtoDBClient} from '../client'
 import {DEFAULT_PORT} from '../constants'
 
 const {port} = yargs.options({
 	port: {
+		alias: 'p',
 		default: DEFAULT_PORT,
 		number: true,
 		describe: 'Port that protoDB is listening on'
@@ -40,11 +42,17 @@ async function processCommands() {
 
 		const args = trimmedLine.split(/\s+/)
 		try {
+			let result: any = 'Done'
 			const [type] = args
 			switch (type) {
-				case 'list':
-					console.log(await client.list())
+				case 'list': {
+					const collections = await client.list()
+					result = {}
+					for (const name in collections) {
+						result[name] = CollectionType[collections[name]]
+					}
 					break
+				}
 				// Name-only commands
 				case 'itemCreate': {
 					const name: string | undefined = args[1]
@@ -64,8 +72,8 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name typeFile`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					const result = await client.itemGet(name)
-					console.log(valueType.toObject(valueType.decode(result)))
+					const response = await client.itemGet(name)
+					result = valueType.toObject(valueType.decode(response))
 					break
 				}
 				case 'itemSet': {
@@ -105,9 +113,9 @@ async function processCommands() {
 					}
 					const [keyType, valueType] =
 						await lookupType(typeFile, 'KeyType', 'ValueType')
-					const result =
+					const response =
 						await client.hashGet(name, keyType.encode(JSON.parse(key)).finish())
-					console.log(result && valueType.toObject(valueType.decode(result)))
+					result = response && valueType.toObject(valueType.decode(response))
 					break
 				}
 				case 'hashSet': {
@@ -127,14 +135,14 @@ async function processCommands() {
 				case 'hashSize': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					console.log(await client.hashSize(name))
+					result = await client.hashSize(name)
 					break
 				}
 				case 'hashIter': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
 					const iter = await client.hashIter(name)
-					console.log(toHexString(iter))
+					result = toHexString(iter)
 					break
 				}
 				case 'hashIterBreak': {
@@ -150,11 +158,11 @@ async function processCommands() {
 					}
 					const [keyType, valueType] =
 						await lookupType(typeFile, 'KeyType', 'ValueType')
-					const result = await client.hashIterNext(fromHexString(iter))
-					console.log(result && {
-						key: keyType.toObject(keyType.decode(result.key)),
-						value: valueType.toObject(valueType.decode(result.value))
-					})
+					const response = await client.hashIterNext(fromHexString(iter))
+					result = response && {
+						key: keyType.toObject(keyType.decode(response.key)),
+						value: valueType.toObject(valueType.decode(response.value))
+					}
 					break
 				}
 				case 'listCreate': {
@@ -181,8 +189,8 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name index typeFile`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					const result = await client.listGet(name, Number(index))
-					console.log(valueType.toObject(valueType.decode(result)))
+					const response = await client.listGet(name, Number(index))
+					result = valueType.toObject(valueType.decode(response))
 					break
 				}
 				case 'listInsert': {
@@ -222,7 +230,7 @@ async function processCommands() {
 				case 'listSize': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					console.log(await client.listSize(name))
+					result = await client.listSize(name)
 					break
 				}
 				case 'listIter': {
@@ -233,7 +241,7 @@ async function processCommands() {
 						start ? Number(start) : undefined,
 						end ? Number(end) : undefined
 					)
-					console.log(toHexString(iter))
+					result = toHexString(iter)
 					break
 				}
 				case 'listIterBreak': {
@@ -248,8 +256,8 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} iter typeFile`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					const result = await client.listIterNext(fromHexString(iter))
-					console.log(result && valueType.toObject(valueType.decode(result)))
+					const response = await client.listIterNext(fromHexString(iter))
+					result = response && valueType.toObject(valueType.decode(response))
 					break
 				}
 				case 'sortedCreate': {
@@ -278,11 +286,11 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} name key typeFile`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					const result = await client.sortedGet(name, JSON.parse(key))
-					console.log(result.map(({key, value}) => ({
+					const response = await client.sortedGet(name, JSON.parse(key))
+					result = response.map(({key, value}) => ({
 						key,
 						value: valueType.toObject(valueType.decode(value))
-					})))
+					}))
 					break
 				}
 				case 'sortedInsert': {
@@ -301,7 +309,7 @@ async function processCommands() {
 				case 'sortedSize': {
 					const name: string | undefined = args[1]
 					if (!name) throw new Error(`Syntax: ${type} name`)
-					console.log(await client.sortedSize(name))
+					result = await client.sortedSize(name)
 					break
 				}
 				case 'sortedIter': {
@@ -313,7 +321,7 @@ async function processCommands() {
 						end ? JSON.parse(end) : undefined,
 						!!inclusive
 					)
-					console.log(toHexString(iter))
+					result = toHexString(iter)
 					break
 				}
 				case 'sortedIterBreak': {
@@ -328,16 +336,17 @@ async function processCommands() {
 						throw new Error(`Syntax: ${type} iter typeFile`)
 					}
 					const [valueType] = await lookupType(typeFile, 'Type')
-					const result = await client.sortedIterNext(fromHexString(iter))
-					console.log(result && {
-						key: result.key,
-						value: valueType.toObject(valueType.decode(result.value))
-					})
+					const response = await client.sortedIterNext(fromHexString(iter))
+					result = response && {
+						key: response.key,
+						value: valueType.toObject(valueType.decode(response.value))
+					}
 					break
 				}
 				default:
 					throw new Error(`Unrecognized command "${type}"`)
 			}
+			console.log(inspect(result, {depth: Infinity, colors: true}))
 		}
 		catch (e) {
 			console.error(e)

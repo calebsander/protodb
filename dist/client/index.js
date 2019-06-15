@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const net = require("net");
 const constants_1 = require("../constants");
 const delimited_stream_1 = require("../delimited-stream");
+const interface_1 = require("../pb/interface");
+exports.CollectionType = interface_1.CollectionType;
 const request_1 = require("../pb/request");
 const queue_1 = require("../queue");
 const toUint8Array = (buffer) => buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -63,14 +65,14 @@ class ProtoDBClient {
      * Example:
      * ```js
      * await client.hashCreate('h')
-     * console.log(await client.list()) // { collections: { h: CollectionType.HASH } }
+     * console.log(await client.list()) // { h: CollectionType.HASH }
      * ```
      *
      * @return all collections in the database
      */
     async list() {
         const { db } = await this.runCommand({ list: {} }, request_1.listResponseType);
-        return db;
+        return db.collections;
     }
     /**
      * Creates an item, a collection that stores a mutable global value.
