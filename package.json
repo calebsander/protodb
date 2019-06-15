@@ -22,7 +22,6 @@
 		"dist/pb/*.proto",
 		"dist/client/index.d.ts",
 		"dist/pb/interface.d.ts",
-		"icon.svg",
 		"mmap-wrapper/mmap.c"
 	],
 	"author": "Caleb Sander",
