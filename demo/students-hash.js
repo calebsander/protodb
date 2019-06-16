@@ -24,7 +24,7 @@ const keyType = root.lookupType('KeyType'),
 async function main() {
 	await client.hashCreate('students')
 	console.log(await client.list())
-	// { collections: { students: 1 } }
+	// { students: 1 }
 
 	const key1 = keyType.encode({id: 10452}).finish()
 	const value1 = {firstName: 'Caleb', lastName: 'Sander', year: 2021}
