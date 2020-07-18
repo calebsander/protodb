@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Queue = void 0;
 const DEFAULT_INITIAL_SIZE = 16;
 // A standard ring-buffer queue. Doubles in size when the buffer fills.
 class Queue {

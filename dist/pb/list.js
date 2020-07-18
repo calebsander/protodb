@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.nodeType = exports.headerType = exports.freePageType = exports.FREE_LIST_END = exports.childType = void 0;
 const path = require("path");
 const protobuf = require("protobufjs");
 const protoFile = protobuf.loadSync(path.join(__dirname, 'list.proto'));

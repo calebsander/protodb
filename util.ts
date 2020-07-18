@@ -17,10 +17,23 @@ export function argmin<T>(arr: T[], keyFunc: (t: T) => number): number {
 	return minIndex
 }
 
+let OVERFLOW_ERROR_TYPE: Function,
+    OVERFLOW_ERROR_MESSAGE: string
+try {
+	// Trigger an overflow by assigning 1 byte to a 0-byte buffer
+	const buffer = new Uint8Array
+	buffer.set([0])
+}
+catch (e) {
+	const err: Error = e
+	OVERFLOW_ERROR_TYPE = err.constructor
+	OVERFLOW_ERROR_MESSAGE = err.message
+}
+
 // Checks that an error is the result of a write overflowing its page
 export function ensureOverflowError(e: Error): void {
 	// istanbul ignore if
-	if (!(e instanceof RangeError && e.message === 'Source is too large')) {
+	if (!(e instanceof OVERFLOW_ERROR_TYPE && e.message === OVERFLOW_ERROR_MESSAGE)) {
 		throw e // unexpected error; rethrow it
 	}
 }

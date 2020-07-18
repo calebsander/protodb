@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.shutdown = exports.copyWithinFile = exports.setFile = exports.setFileSegment = exports.getFile = exports.getPageCount = exports.removeFile = exports.setPageCount = exports.createFile = exports.FilePage = exports.getPageOffset = exports.getPageNo = exports.PAGE_SIZE = void 0;
 const fs_1 = require("fs");
 const util_1 = require("util");
 const mmap_wrapper_1 = require("./mmap-wrapper");
-exports.PAGE_SIZE = mmap_wrapper_1.PAGE_SIZE;
+Object.defineProperty(exports, "PAGE_SIZE", { enumerable: true, get: function () { return mmap_wrapper_1.PAGE_SIZE; } });
 const mmapPromise = util_1.promisify(mmap_wrapper_1.mmap);
 const cache = {};
 function getFileCache(file, create = false) {

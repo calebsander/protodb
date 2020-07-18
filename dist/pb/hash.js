@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.bucketType = exports.bucketItemType = exports.BUCKET_INDEX_BYTES = exports.bucketIndexType = exports.HEADER_BYTES = exports.headerType = void 0;
 const path = require("path");
 const protobuf = require("protobufjs");
 const protoFile = protobuf.loadSync(['hash.proto', 'interface.proto'].map(file => path.join(__dirname, file)));

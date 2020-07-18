@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.CollectionType = exports.ProtoDBClient = exports.ProtoDBError = void 0;
 const net = require("net");
 const constants_1 = require("../constants");
 const delimited_stream_1 = require("../delimited-stream");
 const interface_1 = require("../pb/interface");
-exports.CollectionType = interface_1.CollectionType;
+Object.defineProperty(exports, "CollectionType", { enumerable: true, get: function () { return interface_1.CollectionType; } });
 const request_1 = require("../pb/request");
 const queue_1 = require("../queue");
 const toUint8Array = (buffer) => buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);

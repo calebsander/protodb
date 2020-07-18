@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getNodeLength = exports.ensureOverflowError = exports.argmin = void 0;
 const protobufjs_1 = require("protobufjs");
 const cache_1 = require("./cache");
 // Finds the index of the value in an array that minimizes an objective function
@@ -19,10 +20,21 @@ function argmin(arr, keyFunc) {
     return minIndex;
 }
 exports.argmin = argmin;
+let OVERFLOW_ERROR_TYPE, OVERFLOW_ERROR_MESSAGE;
+try {
+    // Trigger an overflow by assigning 1 byte to a 0-byte buffer
+    const buffer = new Uint8Array;
+    buffer.set([0]);
+}
+catch (e) {
+    const err = e;
+    OVERFLOW_ERROR_TYPE = err.constructor;
+    OVERFLOW_ERROR_MESSAGE = err.message;
+}
 // Checks that an error is the result of a write overflowing its page
 function ensureOverflowError(e) {
     // istanbul ignore if
-    if (!(e instanceof RangeError && e.message === 'Source is too large')) {
+    if (!(e instanceof OVERFLOW_ERROR_TYPE && e.message === OVERFLOW_ERROR_MESSAGE)) {
         throw e; // unexpected error; rethrow it
     }
 }

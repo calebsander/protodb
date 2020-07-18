@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.dropCollection = exports.addCollection = exports.getCollections = void 0;
 const path = require("path");
 const args_1 = require("../args");
 const cache_1 = require("../cache");

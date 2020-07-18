@@ -1,6 +1,7 @@
 "use strict";
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.port = exports.dataDir = void 0;
 const yargs = require("yargs");
 const constants_1 = require("./constants");
 // Parses the command line options to configure the data directory and TCP port
