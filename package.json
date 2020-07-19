@@ -8,8 +8,8 @@
 		"protodb": "dist/main.js"
 	},
 	"scripts": {
-		"build-ts": "rm -rf dist && tsc && tsc -p client && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
-		"build-napi": "node-gyp rebuild && mv build/Release/mmap.node dist/mmap-wrapper.node && rm -r build",
+		"build-ts": "tsc && tsc -p client && cp pb/*.proto dist/pb && chmod a+x dist/main.js",
+		"build-napi": "node-gyp rebuild && mkdir -p dist && mv build/Release/mmap.node dist/mmap-wrapper.node && rm -r build",
 		"build": "npm run build-ts && npm run build-napi",
 		"coveralls": "coveralls < coverage/lcov.info",
 		"prepack": "npm run build-ts",

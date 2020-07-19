@@ -3,9 +3,6 @@ coverage
 
 data
 
-dist/**/*.d.ts
-dist/pb/*.proto
-dist/mmap-wrapper.node
-dist/test
+dist
 
 node_modules
