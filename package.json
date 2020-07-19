@@ -30,7 +30,6 @@
 		"@types/node": "^14.0.23",
 		"@types/yargs": "^15.0.5",
 		"ava": "^3.10.1",
-		"coveralls": "^3.1.0",
 		"nyc": "^15.1.0",
 		"typescript": "^3.9.7"
 	},
