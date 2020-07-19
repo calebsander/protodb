@@ -7,6 +7,6 @@ node_js:
 os:
   - linux
   - osx
-dist: xenial
+dist: bionic
 
 after_success: npm run coveralls
