@@ -14,7 +14,7 @@
 		"coveralls": "coveralls < coverage/lcov.info",
 		"prepack": "npm run build-ts",
 		"install": "npm run build",
-		"test": "tsc -p test && nyc --reporter=lcov ava -v -T 2m dist/test/main.js"
+		"test": "tsc -p test && nyc ava -v -T 2m dist/test/main.js"
 	},
 	"files": [
 		"binding.gyp",
@@ -49,6 +49,9 @@
 		"url": "https://github.com/calebsander/protodb"
 	},
 	"nyc": {
-		"exclude": "dist/test"
+		"extension": ".ts",
+		"exclude": "test",
+		"reporter": "lcov",
+		"sourceMap": true
 	}
 }
