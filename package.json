@@ -13,8 +13,8 @@
 		"build": "npm run build-ts && npm run build-napi",
 		"coveralls": "coveralls < coverage/lcov.info",
 		"prepack": "npm run build-ts",
-		"install": "npm run build-napi",
-		"test": "npm run build && tsc -p test && nyc --reporter=lcov ava -v -T 2m dist/test/main.js"
+		"install": "npm run build",
+		"test": "tsc -p test && nyc --reporter=lcov ava -v -T 2m dist/test/main.js"
 	},
 	"files": [
 		"binding.gyp",

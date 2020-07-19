@@ -1,6 +1,6 @@
 # protoDB
 
-[![Build Status](https://travis-ci.org/calebsander/protodb.svg?branch=master)](https://travis-ci.org/calebsander/protodb)
+[![Build Status](https://github.com/calebsander/protodb/workflows/Node.js%20CI/badge.svg)](https://github.com/calebsander/protodb/actions)
 [![Coverage Status](https://coveralls.io/repos/github/calebsander/protodb/badge.svg?branch=master)](https://coveralls.io/github/calebsander/protodb)
 
 A structured byte-buffer database.
